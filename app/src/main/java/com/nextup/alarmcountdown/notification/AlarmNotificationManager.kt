@@ -121,7 +121,6 @@ object AlarmNotificationManager {
             .setSmallIcon(statusIcon)
             .setContentTitle(title)
             .setContentText(contentText)
-            .setSubText("NextUp")
             .setContentIntent(appPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -133,8 +132,14 @@ object AlarmNotificationManager {
         // 3. Action: Dismiss Alarm (Direct Activity intent to Google Clock HandleApiCalls)
         if (hasValidAlarm) {
             val clockDismissIntent = Intent(AlarmClock.ACTION_DISMISS_ALARM).apply {
-                putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+                // Google Clock's internal parser expects "android.next"
+                putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, "android.next")
+                if (triggerTime != null) {
+                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerTime }
+                    putExtra(AlarmClock.EXTRA_HOUR, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                    putExtra(AlarmClock.EXTRA_MINUTES, cal.get(java.util.Calendar.MINUTE))
+                }
+                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
 

@@ -37,7 +37,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
                         // Send dismiss intent to Google Clock
                         val dismissIntent = Intent(AlarmClock.ACTION_DISMISS_ALARM).apply {
-                            putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT)
+                            putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, "android.next")
+                            if (currentAlarm?.triggerTimeMillis != null) {
+                                val cal = java.util.Calendar.getInstance().apply { timeInMillis = currentAlarm.triggerTimeMillis }
+                                putExtra(AlarmClock.EXTRA_HOUR, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                                putExtra(AlarmClock.EXTRA_MINUTES, cal.get(java.util.Calendar.MINUTE))
+                            }
                             putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
@@ -47,6 +52,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         } catch (e: Exception) {
                             // If direct skip_ui dismiss intent isn't handled without UI, try standard dismiss
                             val fallbackIntent = Intent(AlarmClock.ACTION_DISMISS_ALARM).apply {
+                                putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, "android.next")
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             try {
