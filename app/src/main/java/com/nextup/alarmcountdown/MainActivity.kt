@@ -2,7 +2,9 @@ package com.nextup.alarmcountdown
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
@@ -13,8 +15,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,7 +42,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -53,13 +56,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nextup.alarmcountdown.data.AlarmModel
 import com.nextup.alarmcountdown.data.AlarmRepository
@@ -90,10 +97,7 @@ class MainActivity : ComponentActivity() {
                     onOpenClock = { openClockApp(repository.getNextAlarm()) },
                     onSetAlarm = { openSetAlarmScreen() },
                     onSetPatternInClock = { pattern -> setPatternInClock(pattern) },
-                    onPinWidget = { pinWidgetToHomeScreen() },
-                    onRefresh = {
-                        NextUpWidgetProvider.updateAllWidgets(this)
-                    }
+                    onPinWidget = { pinWidgetToHomeScreen() }
                 )
             }
         }
@@ -162,6 +166,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun isWidgetAdded(context: Context): Boolean {
+    val appWidgetManager = AppWidgetManager.getInstance(context) ?: return false
+    val componentName = ComponentName(context, NextUpWidgetProvider::class.java)
+    val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
+    return widgetIds != null && widgetIds.isNotEmpty()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -170,14 +181,19 @@ fun MainScreen(
     onOpenClock: () -> Unit,
     onSetAlarm: () -> Unit,
     onSetPatternInClock: (AlarmPattern) -> Unit,
-    onPinWidget: () -> Unit,
-    onRefresh: () -> Unit
+    onPinWidget: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val nextAlarm by repository.observeNextAlarm().collectAsStateWithLifecycle(initialValue = repository.getNextAlarm())
 
     var learnedPatterns by remember { mutableStateOf<List<AlarmPattern>>(emptyList()) }
+    var isWidgetPinned by remember { mutableStateOf(isWidgetAdded(context)) }
+
+    LifecycleResumeEffect(Unit) {
+        isWidgetPinned = isWidgetAdded(context)
+        onPauseOrDispose { }
+    }
 
     fun refreshPatterns() {
         coroutineScope.launch {
@@ -203,6 +219,10 @@ fun MainScreen(
     val targetDateTimeText = remember(nextAlarm) {
         AlarmFormatter.formatTargetDateTime(nextAlarm?.triggerTimeMillis)
     }
+    val hasAlarm = nextAlarm != null && (nextAlarm?.triggerTimeMillis ?: 0L) > nowMillis
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Scaffold(
         topBar = {
@@ -210,46 +230,28 @@ fun MainScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth().padding(end = 12.dp)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_alarm),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = stringResource(id = R.string.app_name),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            )
-                        }
-
-                        // App Version Badge
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "v1.1.0",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_alarm),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(id = R.string.app_name),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -258,337 +260,482 @@ fun MainScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Main Confirmed Alarm Hero Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        if (isLandscape) {
+            // Horizontal Landscape: 2-Column layout
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                // Left Column: Nearest Alarm hero card + Action buttons
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        text = stringResource(id = R.string.nearest_alarm_title).uppercase(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 1.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = countdownText,
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 46.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = targetDateTimeText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center
+                    NearestAlarmCard(
+                        countdownText = countdownText,
+                        targetDateTimeText = targetDateTimeText,
+                        hasAlarm = hasAlarm
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Status Badge
-                    val hasAlarm = nextAlarm != null && (nextAlarm?.triggerTimeMillis ?: 0L) > nowMillis
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (hasAlarm) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.errorContainer
-                            )
-                            .padding(horizontal = 12.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = if (hasAlarm) "CONFIRMED ACTIVE" else "NO ACTIVE ALARM",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (hasAlarm) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = onOpenClock,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                    ActionButtons(
+                        onOpenClock = onOpenClock,
+                        onSetAlarm = onSetAlarm
                     )
-                ) {
-                    Text(text = stringResource(id = R.string.open_clock), fontWeight = FontWeight.SemiBold)
                 }
 
-                FilledTonalButton(
-                    onClick = onSetAlarm,
+                // Right Column: Weekly Schedule & Predictions + Optional Widget promo + Footer
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(14.dp)
+                        .weight(1.2f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = stringResource(id = R.string.set_alarm), fontWeight = FontWeight.SemiBold)
+                    WeeklyScheduleSection(
+                        learnedPatterns = learnedPatterns,
+                        nowMillis = nowMillis,
+                        onSetPatternInClock = onSetPatternInClock,
+                        onToggleActive = { pattern, active ->
+                            coroutineScope.launch {
+                                dbManager.togglePatternActive(pattern.patternId, active)
+                                refreshPatterns()
+                                NextUpWidgetProvider.updateAllWidgets(context)
+                            }
+                        },
+                        onDeletePattern = { pattern ->
+                            coroutineScope.launch {
+                                dbManager.deletePattern(pattern.patternId)
+                                refreshPatterns()
+                                NextUpWidgetProvider.updateAllWidgets(context)
+                            }
+                        }
+                    )
+
+                    if (!isWidgetPinned) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        WidgetPromoCard(onPinWidget = {
+                            onPinWidget()
+                            isWidgetPinned = isWidgetAdded(context)
+                        })
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    FooterInfo()
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Section 2: Learned Weekly Schedule
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        } else {
+            // Portrait: Single Column layout
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Weekly Schedule & Predictions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                Spacer(modifier = Modifier.height(12.dp))
+
+                NearestAlarmCard(
+                    countdownText = countdownText,
+                    targetDateTimeText = targetDateTimeText,
+                    hasAlarm = hasAlarm
                 )
-                Text(
-                    text = "${learnedPatterns.count { it.isActive }} active",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ActionButtons(
+                    onOpenClock = onOpenClock,
+                    onSetAlarm = onSetAlarm
                 )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                WeeklyScheduleSection(
+                    learnedPatterns = learnedPatterns,
+                    nowMillis = nowMillis,
+                    onSetPatternInClock = onSetPatternInClock,
+                    onToggleActive = { pattern, active ->
+                        coroutineScope.launch {
+                            dbManager.togglePatternActive(pattern.patternId, active)
+                            refreshPatterns()
+                            NextUpWidgetProvider.updateAllWidgets(context)
+                        }
+                    },
+                    onDeletePattern = { pattern ->
+                        coroutineScope.launch {
+                            dbManager.deletePattern(pattern.patternId)
+                            refreshPatterns()
+                            NextUpWidgetProvider.updateAllWidgets(context)
+                        }
+                    }
+                )
+
+                if (!isWidgetPinned) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    WidgetPromoCard(onPinWidget = {
+                        onPinWidget()
+                        isWidgetPinned = isWidgetAdded(context)
+                    })
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                FooterInfo()
+
+                Spacer(modifier = Modifier.height(30.dp))
             }
+        }
+    }
+}
+
+@Composable
+fun NearestAlarmCard(
+    countdownText: String,
+    targetDateTimeText: String,
+    hasAlarm: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(id = R.string.nearest_alarm_title).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = countdownText,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                lineHeight = 46.sp
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (learnedPatterns.isEmpty()) {
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Learning Your Routine...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "As alarms trigger and cycle during the week, NextUp automatically detects recurring patterns and builds your schedule with 0% battery drain.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-                learnedPatterns.forEach { pattern ->
-                    val nextOccurrence = pattern.getNextOccurrenceMillis(nowMillis)
-                    val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
+            Text(
+                text = targetDateTimeText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
 
-                    Card(
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (hasAlarm) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.errorContainer
+                    )
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = if (hasAlarm) "CONFIRMED ACTIVE" else "NO ACTIVE ALARM",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (hasAlarm) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ActionButtons(
+    onOpenClock: () -> Unit,
+    onSetAlarm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = onOpenClock,
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Text(text = stringResource(id = R.string.open_clock), fontWeight = FontWeight.SemiBold)
+        }
+
+        FilledTonalButton(
+            onClick = onSetAlarm,
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Text(text = stringResource(id = R.string.set_alarm), fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+fun WeeklyScheduleSection(
+    learnedPatterns: List<AlarmPattern>,
+    nowMillis: Long,
+    onSetPatternInClock: (AlarmPattern) -> Unit,
+    onToggleActive: (AlarmPattern, Boolean) -> Unit,
+    onDeletePattern: (AlarmPattern) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Weekly Schedule & Predictions",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "${learnedPatterns.count { it.isActive }} active",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (learnedPatterns.isEmpty()) {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Learning Your Routine...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "As alarms trigger and cycle during the week, NextUp automatically detects recurring patterns and builds your schedule with 0% battery drain.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            learnedPatterns.forEach { pattern ->
+                val nextOccurrence = pattern.getNextOccurrenceMillis(nowMillis)
+                val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (pattern.isActive) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (pattern.isActive) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Day Chip
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = pattern.dayNameShort.uppercase(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Day Chip
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                                ) {
                                     Text(
-                                        text = pattern.timeFormatted,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Black,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    // Predicted Badge
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "EST",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            fontSize = 9.sp
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (pattern.isActive) "Next: in $remaining" else "Deactivated / Missed",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (pattern.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "• Seen ${pattern.confirmedCount}x",
+                                        text = pattern.dayNameShort.uppercase(),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = pattern.timeFormatted,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // Predicted Badge
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "EST",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        fontSize = 9.sp
                                     )
                                 }
                             }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Set in clock button
-                                OutlinedButton(
-                                    onClick = { onSetPatternInClock(pattern) },
-                                    modifier = Modifier.height(36.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("Set", fontSize = 12.sp)
-                                }
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                                Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (pattern.isActive) "Next: in $remaining" else "Deactivated / Missed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (pattern.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                                // Toggle active switch
-                                Switch(
-                                    checked = pattern.isActive,
-                                    onCheckedChange = { active ->
-                                        coroutineScope.launch {
-                                            dbManager.togglePatternActive(pattern.patternId, active)
-                                            refreshPatterns()
-                                            NextUpWidgetProvider.updateAllWidgets(context)
-                                        }
-                                    },
-                                    modifier = Modifier.size(36.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Centered Set in clock button
+                            OutlinedButton(
+                                onClick = { onSetPatternInClock(pattern) },
+                                modifier = Modifier.height(34.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Set",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center
                                 )
+                            }
 
-                                Spacer(modifier = Modifier.width(4.dp))
+                            // Toggle active switch with safe scaling & margin
+                            Switch(
+                                checked = pattern.isActive,
+                                onCheckedChange = { active ->
+                                    onToggleActive(pattern, active)
+                                },
+                                modifier = Modifier.scale(0.85f)
+                            )
 
-                                // Delete button
-                                IconButton(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            dbManager.deletePattern(pattern.patternId)
-                                            refreshPatterns()
-                                            NextUpWidgetProvider.updateAllWidgets(context)
-                                        }
-                                    },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Text("✕", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                                }
+                            // Delete button
+                            IconButton(
+                                onClick = {
+                                    onDeletePattern(pattern)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text(
+                                    text = "✕",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
                             }
                         }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Widget Card
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
-                ) {
-                    Text(
-                        text = "Home Screen Widget",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "NextUp provides an auto-resizing widget. Expand it vertically to see both your confirmed alarm and upcoming predicted routine.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedButton(
-                        onClick = onPinWidget,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Add Widget to Home Screen")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Footer version & license
-            Text(
-                text = "NextUp v1.1.0 (Build 2) • Open Source (GPLv3)",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(30.dp))
         }
     }
+}
+
+@Composable
+fun WidgetPromoCard(
+    onPinWidget: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            Text(
+                text = "Home Screen Widget",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "NextUp provides an auto-resizing widget. Expand it vertically to see both your confirmed alarm and upcoming predicted routine.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onPinWidget,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Add Widget to Home Screen")
+            }
+        }
+    }
+}
+
+@Composable
+fun FooterInfo(modifier: Modifier = Modifier) {
+    Text(
+        text = "NextUp v1.1.0 (Build 2) • Open Source (GPLv3)",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.outline,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+    )
 }

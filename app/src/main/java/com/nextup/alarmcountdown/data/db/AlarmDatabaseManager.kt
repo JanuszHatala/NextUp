@@ -19,6 +19,21 @@ class AlarmDatabaseManager(context: Context) {
      * Updates the recurring pattern counts and recalculates routine statistics.
      */
     suspend fun recordConfirmedAlarm(triggerMillis: Long): Unit = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query(
+            NextUpDatabaseHelper.TABLE_ALARM_EVENTS,
+            arrayOf(NextUpDatabaseHelper.COL_EVENT_ID),
+            "${NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH} = ? AND ${NextUpDatabaseHelper.COL_EVENT_TYPE} = ?",
+            arrayOf(triggerMillis.toString(), "CONFIRMED_SEEN"),
+            null,
+            null,
+            null
+        )
+        val alreadyRecorded = cursor.use { it.moveToFirst() }
+        if (alreadyRecorded) {
+            return@withContext
+        }
+
         val event = AlarmEvent.fromTriggerTime(triggerMillis, "CONFIRMED_SEEN")
         insertEvent(event)
         upsertPatternFromEvent(event, isConfirmed = true)
