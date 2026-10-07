@@ -65,11 +65,26 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setTextViewText(R.id.widget_alarm_time, dateTimeText)
                 } catch (ignored: Exception) {
                 }
-                // Tap main widget area -> Open NextUp App
-                setOnClickPendingIntent(R.id.widget_root, appPendingIntent)
-                // Tap alarm icon -> Open Google Clock
+                // Tap root card / time -> Google Clock
+                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
                 try {
-                    setOnClickPendingIntent(R.id.widget_icon, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
+                } catch (ignored: Exception) {
+                }
+
+                // Tap header or title -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
+                } catch (ignored: Exception) {
+                }
+                try {
+                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
+                } catch (ignored: Exception) {
+                }
+                // In medium/compact layouts (where there is no header text), icon taps open NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
                 } catch (ignored: Exception) {
                 }
             }
@@ -156,16 +171,31 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 setTextViewText(R.id.widget_countdown, countdownText)
                 setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
                 
-                // Top section / card tap -> NextUp App
+                // Root card tap default -> Google Clock
+                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+
+                // Top header / title tap -> NextUp App
                 try {
-                    setOnClickPendingIntent(R.id.widget_top_section, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
                 } catch (ignored: Exception) {}
                 try {
-                    setOnClickPendingIntent(R.id.widget_root, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
                 } catch (ignored: Exception) {}
-                // Icon tap -> Google Clock
+
+                // Alarm countdown and target time tap -> Google Clock
+                try {
+                    setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
+                } catch (ignored: Exception) {}
+                try {
+                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
+                } catch (ignored: Exception) {}
                 try {
                     setOnClickPendingIntent(R.id.widget_icon, clockPendingIntent)
+                } catch (ignored: Exception) {}
+
+                // Routine subheader tap -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_section_predicted, appPendingIntent)
                 } catch (ignored: Exception) {}
 
                 val dbManager = com.nextup.alarmcountdown.data.db.AlarmDatabaseManager(context)
@@ -191,20 +221,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_predicted_row_1, android.view.View.VISIBLE)
                     setTextViewText(R.id.widget_predicted_1_text, "${p1.dayNameShort} ${p1.timeFormatted} • in $p1Countdown")
 
-                    val p1Intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                        putExtra(AlarmClock.EXTRA_HOUR, p1.hour)
-                        putExtra(AlarmClock.EXTRA_MINUTES, p1.minute)
-                        putExtra(AlarmClock.EXTRA_DAYS, arrayListOf(p1.dayOfWeek))
-                        putExtra(AlarmClock.EXTRA_SKIP_UI, false)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    val p1Pending = PendingIntent.getActivity(
-                        context,
-                        101,
-                        p1Intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    setOnClickPendingIntent(R.id.widget_predicted_row_1, p1Pending)
+                    // Bottom predicted row tap -> Google Clock
+                    setOnClickPendingIntent(R.id.widget_predicted_row_1, clockPendingIntent)
 
                     if (activePatterns.size > 1) {
                         val p2 = activePatterns[1]
@@ -213,20 +231,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                         setViewVisibility(R.id.widget_predicted_row_2, android.view.View.VISIBLE)
                         setTextViewText(R.id.widget_predicted_2_text, "${p2.dayNameShort} ${p2.timeFormatted} • in $p2Countdown")
 
-                        val p2Intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                            putExtra(AlarmClock.EXTRA_HOUR, p2.hour)
-                            putExtra(AlarmClock.EXTRA_MINUTES, p2.minute)
-                            putExtra(AlarmClock.EXTRA_DAYS, arrayListOf(p2.dayOfWeek))
-                            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        val p2Pending = PendingIntent.getActivity(
-                            context,
-                            102,
-                            p2Intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        )
-                        setOnClickPendingIntent(R.id.widget_predicted_row_2, p2Pending)
+                        // Bottom predicted row 2 tap -> Google Clock
+                        setOnClickPendingIntent(R.id.widget_predicted_row_2, clockPendingIntent)
                     } else {
                         setViewVisibility(R.id.widget_predicted_row_2, android.view.View.GONE)
                     }
@@ -243,7 +249,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_predicted_row_2, android.view.View.GONE)
                     setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
                     setTextViewText(R.id.widget_predicted_more, "Learning weekly routine...")
-                    setOnClickPendingIntent(R.id.widget_predicted_more, appPendingIntent)
+                    // Tapping empty routine state also opens Google Clock
+                    setOnClickPendingIntent(R.id.widget_predicted_more, clockPendingIntent)
                 }
             }
 

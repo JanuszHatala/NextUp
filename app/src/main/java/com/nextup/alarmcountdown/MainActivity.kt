@@ -151,6 +151,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setPatternInClock(pattern: AlarmPattern) {
+        val current = repository.getNextAlarm()
+        if (isPatternMatchingNextAlarm(pattern, current)) {
+            android.widget.Toast.makeText(
+                this,
+                "Alarm for ${pattern.timeFormatted} is already active in Clock",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            openClockApp(current)
+            return
+        }
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, pattern.hour)
             putExtra(AlarmClock.EXTRA_MINUTES, pattern.minute)
@@ -164,6 +174,14 @@ class MainActivity : ComponentActivity() {
             openClockApp(null)
         }
     }
+}
+
+fun isPatternMatchingNextAlarm(pattern: AlarmPattern, nextAlarm: AlarmModel?): Boolean {
+    if (nextAlarm == null || nextAlarm.triggerTimeMillis <= 0L) return false
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
+    return pattern.dayOfWeek == cal.get(java.util.Calendar.DAY_OF_WEEK) &&
+           pattern.hour == cal.get(java.util.Calendar.HOUR_OF_DAY) &&
+           pattern.minute == cal.get(java.util.Calendar.MINUTE)
 }
 
 fun isWidgetAdded(context: Context): Boolean {
@@ -303,6 +321,8 @@ fun MainScreen(
                     WeeklyScheduleSection(
                         learnedPatterns = learnedPatterns,
                         nowMillis = nowMillis,
+                        nextAlarm = nextAlarm,
+                        onOpenClock = onOpenClock,
                         onSetPatternInClock = onSetPatternInClock,
                         onToggleActive = { pattern, active ->
                             coroutineScope.launch {
@@ -365,6 +385,8 @@ fun MainScreen(
                 WeeklyScheduleSection(
                     learnedPatterns = learnedPatterns,
                     nowMillis = nowMillis,
+                    nextAlarm = nextAlarm,
+                    onOpenClock = onOpenClock,
                     onSetPatternInClock = onSetPatternInClock,
                     onToggleActive = { pattern, active ->
                         coroutineScope.launch {
@@ -512,11 +534,14 @@ fun ActionButtons(
 fun WeeklyScheduleSection(
     learnedPatterns: List<AlarmPattern>,
     nowMillis: Long,
+    nextAlarm: AlarmModel?,
+    onOpenClock: () -> Unit,
     onSetPatternInClock: (AlarmPattern) -> Unit,
     onToggleActive: (AlarmPattern, Boolean) -> Unit,
     onDeletePattern: (AlarmPattern) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -568,6 +593,7 @@ fun WeeklyScheduleSection(
             learnedPatterns.forEach { pattern ->
                 val nextOccurrence = pattern.getNextOccurrenceMillis(nowMillis)
                 val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
+                val isAlreadyActive = isPatternMatchingNextAlarm(pattern, nextAlarm)
 
                 Card(
                     modifier = Modifier
@@ -644,19 +670,45 @@ fun WeeklyScheduleSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Centered Set in clock button
-                            OutlinedButton(
-                                onClick = { onSetPatternInClock(pattern) },
-                                modifier = Modifier.height(34.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(
-                                    text = "Set",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.Center
-                                )
+                            if (isAlreadyActive) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Alarm for ${pattern.timeFormatted} is already active in Clock",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                        onOpenClock()
+                                    },
+                                    modifier = Modifier.height(34.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Active ✓",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { onSetPatternInClock(pattern) },
+                                    modifier = Modifier.height(34.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Set",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
 
                             // Toggle active switch with safe scaling & margin
