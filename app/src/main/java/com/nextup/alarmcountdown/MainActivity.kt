@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -724,6 +725,7 @@ fun WeeklyScheduleSection(
                                 // Predicted Badge
                                 Box(
                                     modifier = Modifier
+                                        .wrapContentWidth()
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(MaterialTheme.colorScheme.secondaryContainer)
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
@@ -733,7 +735,9 @@ fun WeeklyScheduleSection(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        fontSize = 9.sp
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }

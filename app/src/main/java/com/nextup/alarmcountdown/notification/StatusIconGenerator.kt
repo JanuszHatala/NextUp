@@ -23,12 +23,12 @@ object StatusIconGenerator {
         showStatusBarInfo: Boolean
     ): IconCompat {
         if (!showStatusBarInfo || triggerTimeMillis == null || triggerTimeMillis <= 0L) {
-            return IconCompat.createWithResource(context, R.drawable.ic_alarm)
+            return IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
         }
 
         val remainingMillis = triggerTimeMillis - System.currentTimeMillis()
         if (remainingMillis <= 0L) {
-            return IconCompat.createWithResource(context, R.drawable.ic_alarm)
+            return IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
         }
 
         val totalMinutes = remainingMillis / 60_000L
@@ -42,7 +42,7 @@ object StatusIconGenerator {
             val bitmap = createBadgeBitmap(textToDraw)
             IconCompat.createWithBitmap(bitmap)
         } catch (e: Exception) {
-            IconCompat.createWithResource(context, R.drawable.ic_alarm)
+            IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
         }
     }
 

@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.AlarmClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -22,17 +23,20 @@ import com.nextup.alarmcountdown.util.AlarmFormatter
 
 object AlarmNotificationManager {
 
-    const val CHANNEL_ID = "nearest_alarm_channel"
+    const val CHANNEL_ID = "nearest_alarm_channel_v2"
     const val NOTIFICATION_ID = 2001
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Nearest Alarm"
             val descriptionText = "Displays ongoing countdown and info for the nearest active alarm"
-            val importance = NotificationManager.IMPORTANCE_LOW // No intrusive sound/vibration on minute updates
+            // IMPORTANCE_DEFAULT ensures visibility in the status bar while setSound(null, null) prevents noise
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
             }
             val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -122,18 +126,22 @@ object AlarmNotificationManager {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
 
-        // 3. Action: Dismiss Alarm (Only available if there is an active alarm)
+        // 3. Action: Dismiss Alarm (Direct Activity intent to Google Clock HandleApiCalls)
         if (hasValidAlarm) {
-            val dismissAlarmIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_DISMISS_ALARM
+            val clockDismissIntent = Intent(AlarmClock.ACTION_DISMISS_ALARM).apply {
+                putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT)
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-            val dismissAlarmPendingIntent = PendingIntent.getBroadcast(
+
+            val dismissAlarmPendingIntent = PendingIntent.getActivity(
                 context,
                 203,
-                dismissAlarmIntent,
+                clockDismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(

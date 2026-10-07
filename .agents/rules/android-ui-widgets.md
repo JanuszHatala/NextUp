@@ -17,6 +17,10 @@
   - When constraining `OutlinedButton` or `Button` height (e.g. `32dp - 36dp`), override default padding with `contentPadding = PaddingValues(horizontal = 10.dp..12.dp, vertical = 0.dp)` to ensure label text is vertically and horizontally centered.
 - **Badge & Status Text Overflow**:
   - Subtitle status indicators must enforce `maxLines = 1` and `overflow = TextOverflow.Ellipsis` to prevent awkward multi-line word breaks.
+  - **Badges, Tags & Acronym Chips (e.g. `EST`, `AM/PM`, Day Chips)**:
+    - Never allow badges or tag labels to soft-wrap into multiple lines under layout pressure.
+    - Badges MUST always enforce `maxLines = 1` and `softWrap = false`.
+    - Containers wrapping tags must use `Modifier.wrapContentWidth()` (or horizontal scroll/flow) rather than being squished by adjacent weighted elements.
 
 ## 3. AlarmManager & System Clock Integration
 - **Prevent Duplicate Alarms**:
