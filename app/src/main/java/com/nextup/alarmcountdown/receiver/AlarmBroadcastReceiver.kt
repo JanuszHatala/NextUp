@@ -15,11 +15,13 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_REFRESH_WIDGET = "com.nextup.alarmcountdown.ACTION_REFRESH_WIDGET"
+        const val ACTION_REFRESH_NOTIFICATION = "com.nextup.alarmcountdown.ACTION_REFRESH_NOTIFICATION"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_REFRESH_WIDGET,
+            ACTION_REFRESH_NOTIFICATION,
             AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED,
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
@@ -40,6 +42,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     } catch (ignored: Exception) {
                     } finally {
                         NextUpWidgetProvider.updateAllWidgets(context)
+                        com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(context)
                         pendingResult.finish()
                     }
                 }

@@ -68,10 +68,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 import com.nextup.alarmcountdown.data.AlarmModel
 import com.nextup.alarmcountdown.data.AlarmRepository
+import com.nextup.alarmcountdown.data.NextUpPreferences
 import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
 import com.nextup.alarmcountdown.data.model.AlarmPattern
+import com.nextup.alarmcountdown.notification.AlarmNotificationManager
 import com.nextup.alarmcountdown.ui.theme.NextUpTheme
 import com.nextup.alarmcountdown.util.AlarmFormatter
 import com.nextup.alarmcountdown.widget.NextUpWidgetProvider
@@ -82,18 +89,21 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var repository: AlarmRepository
     private lateinit var dbManager: AlarmDatabaseManager
+    private lateinit var prefs: NextUpPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = AlarmRepository(this)
         dbManager = AlarmDatabaseManager(this)
+        prefs = NextUpPreferences.getInstance(this)
 
         setContent {
             NextUpTheme {
                 MainScreen(
                     repository = repository,
                     dbManager = dbManager,
+                    prefs = prefs,
                     onOpenClock = { openClockApp(repository.getNextAlarm()) },
                     onSetAlarm = { openSetAlarmScreen() },
                     onSetPatternInClock = { pattern -> setPatternInClock(pattern) },
@@ -105,7 +115,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        prefs.syncFromDisk()
         NextUpWidgetProvider.updateAllWidgets(this)
+        com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(this)
     }
 
     private fun pinWidgetToHomeScreen() {
@@ -196,6 +208,7 @@ fun isWidgetAdded(context: Context): Boolean {
 fun MainScreen(
     repository: AlarmRepository,
     dbManager: AlarmDatabaseManager,
+    prefs: NextUpPreferences,
     onOpenClock: () -> Unit,
     onSetAlarm: () -> Unit,
     onSetPatternInClock: (AlarmPattern) -> Unit,
@@ -208,7 +221,23 @@ fun MainScreen(
     var learnedPatterns by remember { mutableStateOf<List<AlarmPattern>>(emptyList()) }
     var isWidgetPinned by remember { mutableStateOf(isWidgetAdded(context)) }
 
+    val isNotificationEnabled by prefs.isNotificationEnabledFlow.collectAsStateWithLifecycle()
+    val isStatusBarInfoEnabled by prefs.isStatusBarInfoEnabledFlow.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            prefs.isNotificationEnabled = true
+            AlarmNotificationManager.updateNotification(context)
+        } else {
+            prefs.isNotificationEnabled = false
+            AlarmNotificationManager.cancelNotification(context)
+        }
+    }
+
     LifecycleResumeEffect(Unit) {
+        prefs.syncFromDisk()
         isWidgetPinned = isWidgetAdded(context)
         onPauseOrDispose { }
     }
@@ -287,14 +316,14 @@ fun MainScreen(
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Left Column: Nearest Alarm hero card + Action buttons
+                // Left Column: Nearest Alarm hero card + Action buttons + Notification Card
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Top
                 ) {
                     NearestAlarmCard(
                         countdownText = countdownText,
@@ -307,6 +336,34 @@ fun MainScreen(
                     ActionButtons(
                         onOpenClock = onOpenClock,
                         onSetAlarm = onSetAlarm
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    NotificationSettingsCard(
+                        isNotificationEnabled = isNotificationEnabled,
+                        isStatusBarInfoEnabled = isStatusBarInfoEnabled,
+                        onToggleNotification = { enabled ->
+                            if (enabled) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    prefs.isNotificationEnabled = true
+                                    AlarmNotificationManager.updateNotification(context)
+                                }
+                            } else {
+                                prefs.isNotificationEnabled = false
+                                AlarmNotificationManager.cancelNotification(context)
+                            }
+                        },
+                        onToggleStatusBarInfo = { enabled ->
+                            prefs.isStatusBarInfoEnabled = enabled
+                            if (prefs.isNotificationEnabled) {
+                                AlarmNotificationManager.updateNotification(context)
+                            }
+                        }
                     )
                 }
 
@@ -378,6 +435,34 @@ fun MainScreen(
                 ActionButtons(
                     onOpenClock = onOpenClock,
                     onSetAlarm = onSetAlarm
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NotificationSettingsCard(
+                    isNotificationEnabled = isNotificationEnabled,
+                    isStatusBarInfoEnabled = isStatusBarInfoEnabled,
+                    onToggleNotification = { enabled ->
+                        if (enabled) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                prefs.isNotificationEnabled = true
+                                AlarmNotificationManager.updateNotification(context)
+                            }
+                        } else {
+                            prefs.isNotificationEnabled = false
+                            AlarmNotificationManager.cancelNotification(context)
+                        }
+                    },
+                    onToggleStatusBarInfo = { enabled ->
+                        prefs.isStatusBarInfoEnabled = enabled
+                        if (prefs.isNotificationEnabled) {
+                            AlarmNotificationManager.updateNotification(context)
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -776,6 +861,94 @@ fun WidgetPromoCard(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Add Widget to Home Screen")
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationSettingsCard(
+    isNotificationEnabled: Boolean,
+    isStatusBarInfoEnabled: Boolean,
+    onToggleNotification: (Boolean) -> Unit,
+    onToggleStatusBarInfo: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.notification_settings_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Main Notification Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(id = R.string.notification_toggle_label),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(id = R.string.notification_toggle_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = isNotificationEnabled,
+                    onCheckedChange = onToggleNotification,
+                    modifier = Modifier.scale(0.85f)
+                )
+            }
+
+            if (isNotificationEnabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Status Bar Indicator Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(id = R.string.status_bar_info_label),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(id = R.string.status_bar_info_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = isStatusBarInfoEnabled,
+                        onCheckedChange = onToggleStatusBarInfo,
+                        modifier = Modifier.scale(0.85f)
+                    )
+                }
             }
         }
     }

@@ -7,4 +7,9 @@
     <string name="set_alarm">Set Alarm</string>
     <string name="nearest_alarm_title">Nearest Alarm</string>
     <string name="system_sync_note">NextUp continuously monitors the next scheduled system alarm set on your phone.</string>
+    <string name="notification_settings_title">Persistent Notification</string>
+    <string name="notification_toggle_label">Show nearest alarm in notification</string>
+    <string name="notification_toggle_desc">Keeps an ongoing notification with live countdown and quick dismiss actions.</string>
+    <string name="status_bar_info_label">Show time in status bar icon</string>
+    <string name="status_bar_info_desc">Draws compact remaining time directly on the status bar icon badge.</string>
 </resources>
