@@ -30,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,6 +45,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -132,22 +134,55 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openClockApp(alarm: AlarmModel?) {
-        if (alarm?.showIntent != null) {
+        // 1. Try launching Google Clock directly (brings Clock reliably to foreground)
+        val deskClockIntent = packageManager.getLaunchIntentForPackage("com.google.android.deskclock")
+        if (deskClockIntent != null) {
             try {
-                alarm.showIntent.send()
+                deskClockIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(deskClockIntent)
                 return
             } catch (ignored: Exception) {
             }
         }
-        val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+
+        // 2. Try standard Android SHOW_ALARMS intent
         try {
+            val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
             startActivity(intent)
-        } catch (e: Exception) {
-            val launchIntent = packageManager.getLaunchIntentForPackage("com.google.android.deskclock")
-            if (launchIntent != null) {
-                startActivity(launchIntent)
+            return
+        } catch (ignored: Exception) {
+        }
+
+        // 3. Try alarm's showIntent with explicit ActivityOptions for Android 14+ BAL
+        if (alarm?.showIntent != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    val options = android.app.ActivityOptions.makeBasic()
+                        .setPendingIntentBackgroundActivityStartMode(
+                            android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                        )
+                    alarm.showIntent.send(this, 0, null, null, null, null, options.toBundle())
+                } else {
+                    alarm.showIntent.send()
+                }
+                return
+            } catch (ignored: Exception) {
+            }
+        }
+
+        // 4. Try OEM clock fallbacks (Samsung, generic AOSP DeskClock)
+        val clockPackages = listOf("com.sec.android.app.clockpackage", "com.android.deskclock")
+        for (pkg in clockPackages) {
+            val fallbackIntent = packageManager.getLaunchIntentForPackage(pkg)
+            if (fallbackIntent != null) {
+                try {
+                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(fallbackIntent)
+                    return
+                } catch (ignored: Exception) {
+                }
             }
         }
     }
@@ -224,6 +259,7 @@ fun MainScreen(
 
     val isNotificationEnabled by prefs.isNotificationEnabledFlow.collectAsStateWithLifecycle()
     val isStatusBarInfoEnabled by prefs.isStatusBarInfoEnabledFlow.collectAsStateWithLifecycle()
+    val widgetAlignment by prefs.widgetAlignmentFlow.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -398,13 +434,19 @@ fun MainScreen(
                         }
                     )
 
-                    if (!isWidgetPinned) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        WidgetPromoCard(onPinWidget = {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    WidgetSettingsCard(
+                        widgetAlignment = widgetAlignment,
+                        onSetAlignment = { alignment ->
+                            prefs.widgetAlignment = alignment
+                            NextUpWidgetProvider.updateAllWidgets(context)
+                        },
+                        isWidgetPinned = isWidgetPinned,
+                        onPinWidget = {
                             onPinWidget()
                             isWidgetPinned = isWidgetAdded(context)
-                        })
-                    }
+                        }
+                    )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -490,13 +532,19 @@ fun MainScreen(
                     }
                 )
 
-                if (!isWidgetPinned) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    WidgetPromoCard(onPinWidget = {
+                Spacer(modifier = Modifier.height(20.dp))
+                WidgetSettingsCard(
+                    widgetAlignment = widgetAlignment,
+                    onSetAlignment = { alignment ->
+                        prefs.widgetAlignment = alignment
+                        NextUpWidgetProvider.updateAllWidgets(context)
+                    },
+                    isWidgetPinned = isWidgetPinned,
+                    onPinWidget = {
                         onPinWidget()
                         isWidgetPinned = isWidgetAdded(context)
-                    })
-                }
+                    }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -628,6 +676,7 @@ fun WeeklyScheduleSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var patternToDelete by remember { mutableStateOf<AlarmPattern?>(null) }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -809,10 +858,10 @@ fun WeeklyScheduleSection(
                                 modifier = Modifier.scale(0.85f)
                             )
 
-                            // Delete button
+                            // Delete button (prompts confirmation dialog)
                             IconButton(
                                 onClick = {
-                                    onDeletePattern(pattern)
+                                    patternToDelete = pattern
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
@@ -829,10 +878,52 @@ fun WeeklyScheduleSection(
             }
         }
     }
+
+    if (patternToDelete != null) {
+        val target = patternToDelete!!
+        AlertDialog(
+            onDismissRequest = { patternToDelete = null },
+            title = {
+                Text(
+                    text = "Delete Learned Alarm?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete the learned routine for ${target.dayNameShort} at ${target.timeFormatted}? NextUp won't predict this alarm until it is detected again.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeletePattern(target)
+                        patternToDelete = null
+                    }
+                ) {
+                    Text(
+                        text = "Delete",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { patternToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun WidgetPromoCard(
+fun WidgetSettingsCard(
+    widgetAlignment: String,
+    onSetAlignment: (String) -> Unit,
+    isWidgetPinned: Boolean,
     onPinWidget: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -854,17 +945,106 @@ fun WidgetPromoCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "NextUp provides an auto-resizing widget. Expand it vertically to see both your confirmed alarm and upcoming predicted routine.",
+                text = "NextUp provides an auto-resizing widget showing your live countdown and predicted routine.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
             Spacer(modifier = Modifier.height(14.dp))
+
+            // Alignment Selector
+            Text(
+                text = stringResource(id = R.string.widget_alignment_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(id = R.string.widget_alignment_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val isLeft = widgetAlignment == NextUpPreferences.ALIGNMENT_LEFT
+                val isCenter = widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
+
+                if (isLeft) {
+                    Button(
+                        onClick = { },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "${stringResource(id = R.string.widget_alignment_left)} ✓",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSetAlignment(NextUpPreferences.ALIGNMENT_LEFT) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.widget_alignment_left),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                if (isCenter) {
+                    Button(
+                        onClick = { },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "${stringResource(id = R.string.widget_alignment_center)} ✓",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSetAlignment(NextUpPreferences.ALIGNMENT_CENTER) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.widget_alignment_center),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             OutlinedButton(
                 onClick = onPinWidget,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Add Widget to Home Screen")
+                Text(if (isWidgetPinned) "Add Another Widget" else "Add Widget to Home Screen")
             }
         }
     }

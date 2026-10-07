@@ -102,15 +102,17 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val fullTargetDateTimeText = AlarmFormatter.formatTargetDateTime(nextAlarm?.triggerTimeMillis)
             val shortTargetDateTimeText = AlarmFormatter.formatShortTargetDateTime(nextAlarm?.triggerTimeMillis)
 
-            // Main clock tap -> Google Clock (or specific alarm)
-            val clockPendingIntent = nextAlarm?.showIntent ?: run {
-                val clockIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
+            // Main clock tap -> Google Clock
+            val clockPendingIntent = run {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage("com.google.android.deskclock")
+                    ?: Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 PendingIntent.getActivity(
                     context,
                     0,
-                    clockIntent,
+                    launchIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             }
@@ -126,6 +128,14 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val prefs = com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context)
+            val isCentered = prefs.widgetAlignment == com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER
+
+            val compactWideLayout = if (isCentered) R.layout.widget_next_up_compact_wide_center else R.layout.widget_next_up_compact_wide
+            val mediumLayout = if (isCentered) R.layout.widget_next_up_medium_center else R.layout.widget_next_up_medium
+            val largeLayout = if (isCentered) R.layout.widget_next_up_center else R.layout.widget_next_up
+            val tallLayout = if (isCentered) R.layout.widget_next_up_tall_center else R.layout.widget_next_up_tall
+
             // 1. Tiny (1x1 or smallest shrinked): icon + countdown only
             val tinyViews = buildViews(
                 context,
@@ -139,7 +149,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             // 2. Compact wide (2x1): icon + countdown + concise shortcut day/time
             val compactWideViews = buildViews(
                 context,
-                R.layout.widget_next_up_compact_wide,
+                compactWideLayout,
                 countdownText,
                 shortTargetDateTimeText,
                 clockPendingIntent,
@@ -149,7 +159,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             // 3. Medium wide (3x1, 4x1): icon + countdown + concise day/time
             val mediumViews = buildViews(
                 context,
-                R.layout.widget_next_up_medium,
+                mediumLayout,
                 countdownText,
                 shortTargetDateTimeText,
                 clockPendingIntent,
@@ -159,7 +169,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             // 4. Large (2x2, 3x2, etc.): full header, large countdown, full day/time
             val largeViews = buildViews(
                 context,
-                R.layout.widget_next_up,
+                largeLayout,
                 countdownText,
                 fullTargetDateTimeText,
                 clockPendingIntent,
@@ -167,7 +177,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             )
 
             // 5. Tall / Expanded (vertically expanded: 2x3, 3x3, 4x2+): confirmed + upcoming predicted alarms
-            val tallViews = RemoteViews(context.packageName, R.layout.widget_next_up_tall).apply {
+            val tallViews = RemoteViews(context.packageName, tallLayout).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
                 setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
                 

@@ -12,4 +12,8 @@
     <string name="notification_toggle_desc">Keeps an ongoing notification with live countdown and quick dismiss actions.</string>
     <string name="status_bar_info_label">Show time in status bar icon</string>
     <string name="status_bar_info_desc">Draws compact remaining time directly on the status bar icon badge.</string>
+    <string name="widget_alignment_title">Widget Text Alignment</string>
+    <string name="widget_alignment_desc">Choose whether text in the home screen widget is left-aligned or centered.</string>
+    <string name="widget_alignment_left">Left Aligned</string>
+    <string name="widget_alignment_center">Centered</string>
 </resources>
