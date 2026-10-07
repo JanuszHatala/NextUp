@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Top header: Alarm icon and NextUp app launch chip -->
+    <LinearLayout
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/widget_icon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/ic_alarm" />
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="CONFIRMED NEXT"
+            android:textColor="@color/widget_on_surface_variant"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_app_chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_chip_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:text="@string/app_name"
+            android:textColor="@color/widget_chip_text"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Main countdown center text -->
+    <TextView
+        android:id="@+id/widget_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:autoSizeMaxTextSize="32sp"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:ellipsize="none"
+        android:fontFamily="sans-serif-black"
+        android:maxLines="1"
+        android:text="@string/no_alarm_set"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="26sp" />
+
+    <TextView
+        android:id="@+id/widget_alarm_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:maxLines="1"
+        android:text=""
+        android:textColor="@color/widget_on_surface_variant"
+        android:textSize="12sp" />
+
+    <!-- Divider / Subheader -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="6dp"
+        android:background="@color/widget_chip_bg" />
+
+    <TextView
+        android:id="@+id/widget_section_predicted"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.05"
+        android:text="UPCOMING ROUTINE"
+        android:textColor="@color/widget_on_surface_variant"
+        android:textSize="10sp" />
+
+    <!-- Predicted Row 1 -->
+    <LinearLayout
+        android:id="@+id/widget_predicted_row_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_predicted_1_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif"
+            android:maxLines="1"
+            android:text="Tom 08:30"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_est_badge"
+            android:fontFamily="sans-serif-bold"
+            android:paddingStart="6dp"
+            android:paddingTop="1dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="1dp"
+            android:text="EST"
+            android:textColor="@color/widget_chip_text"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+    <!-- Predicted Row 2 -->
+    <LinearLayout
+        android:id="@+id/widget_predicted_row_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_predicted_2_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif"
+            android:maxLines="1"
+            android:text="Fri 07:00"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_est_badge"
+            android:fontFamily="sans-serif-bold"
+            android:paddingStart="6dp"
+            android:paddingTop="1dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="1dp"
+            android:text="EST"
+            android:textColor="@color/widget_chip_text"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+    <!-- Additional Alarms Counter -->
+    <TextView
+        android:id="@+id/widget_predicted_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:fontFamily="sans-serif-medium"
+        android:text=""
+        android:textColor="@color/widget_primary"
+        android:textSize="10sp" />
+
+</LinearLayout>

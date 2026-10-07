@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">NextUp</string>
+    <string name="widget_name">Next Alarm Countdown</string>
+    <string name="widget_description">Shows countdown to the nearest scheduled alarm</string>
+    <string name="no_alarm_set">No alarm set</string>
+    <string name="open_clock">Open Clock</string>
+    <string name="set_alarm">Set Alarm</string>
+    <string name="nearest_alarm_title">Nearest Alarm</string>
+    <string name="system_sync_note">NextUp continuously monitors the next scheduled system alarm set on your phone.</string>
+</resources>
