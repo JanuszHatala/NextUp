@@ -11,7 +11,11 @@ For all code modifications, enhancements, bugfixes, and CI/tooling updates:
    - Ensure local unit tests (`./gradlew testDebugUnitTest`) and build validation (`./gradlew assembleDebug`) pass before pushing.
    - Pull requests trigger GitHub Actions CI workflows to validate changes on GitHub runners before merging.
 
-3. **Pull Request Protocol**:
+3. **Identity & Author Enforcement**:
+   - Commits for Janusz Hatala projects must strictly use `Janusz Hatala <janusz.hatala@gmail.com>`.
+   - Never use the company account or email (`januszhatala-tb` / `janusz.hatala@timebook.net`) for personal repositories.
+
+4. **Pull Request Protocol**:
    - Push the branch to GitHub (`git push -u origin <branch-name>`).
    - Create a Pull Request against `main` using `gh pr create --title "..." --body "..."`.
    - Wait for CI checks or verify workflow trigger status (`gh pr checks` / `gh run list`).
