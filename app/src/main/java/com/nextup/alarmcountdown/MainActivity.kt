@@ -975,18 +975,22 @@ fun WidgetSettingsCard(
                 val isCenter = widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
                 if (isLeft) {
-                    Button(
+                    FilledTonalButton(
                         onClick = { },
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     ) {
-                        Text(
-                            text = "${stringResource(id = R.string.widget_alignment_left)} ✓",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_format_align_left),
+                            contentDescription = stringResource(id = R.string.widget_alignment_left),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 } else {
@@ -994,30 +998,36 @@ fun WidgetSettingsCard(
                         onClick = { onSetAlignment(NextUpPreferences.ALIGNMENT_LEFT) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text(
-                            text = stringResource(id = R.string.widget_alignment_left),
-                            fontSize = 12.sp
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_format_align_left),
+                            contentDescription = stringResource(id = R.string.widget_alignment_left),
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
                 if (isCenter) {
-                    Button(
+                    FilledTonalButton(
                         onClick = { },
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     ) {
-                        Text(
-                            text = "${stringResource(id = R.string.widget_alignment_center)} ✓",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_format_align_center),
+                            contentDescription = stringResource(id = R.string.widget_alignment_center),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 } else {
@@ -1025,13 +1035,15 @@ fun WidgetSettingsCard(
                         onClick = { onSetAlignment(NextUpPreferences.ALIGNMENT_CENTER) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text(
-                            text = stringResource(id = R.string.widget_alignment_center),
-                            fontSize = 12.sp
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_format_align_center),
+                            contentDescription = stringResource(id = R.string.widget_alignment_center),
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

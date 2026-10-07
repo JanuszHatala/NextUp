@@ -55,4 +55,13 @@
             android:textSize="11sp" />
     </LinearLayout>
 
+    <ImageView
+        android:id="@+id/widget_btn_align_toggle"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_gravity="center_vertical"
+        android:padding="3dp"
+        android:contentDescription="@string/widget_alignment_title"
+        android:src="@drawable/ic_format_align_left" />
+
 </LinearLayout>

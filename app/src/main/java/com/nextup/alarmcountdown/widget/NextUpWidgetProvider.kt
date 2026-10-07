@@ -57,7 +57,9 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             countdownText: String,
             dateTimeText: String,
             clockPendingIntent: PendingIntent,
-            appPendingIntent: PendingIntent
+            appPendingIntent: PendingIntent,
+            alignTogglePendingIntent: PendingIntent? = null,
+            alignIconRes: Int = 0
         ): RemoteViews {
             return RemoteViews(context.packageName, layoutId).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
@@ -86,6 +88,15 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 try {
                     setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
                 } catch (ignored: Exception) {
+                }
+
+                // Alignment toggle button
+                if (alignTogglePendingIntent != null && alignIconRes != 0) {
+                    try {
+                        setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
+                        setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
+                    } catch (ignored: Exception) {
+                    }
                 }
             }
         }
@@ -136,6 +147,17 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val largeLayout = if (isCentered) R.layout.widget_next_up_center else R.layout.widget_next_up
             val tallLayout = if (isCentered) R.layout.widget_next_up_tall_center else R.layout.widget_next_up_tall
 
+            val toggleAlignIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                action = AlarmBroadcastReceiver.ACTION_TOGGLE_WIDGET_ALIGNMENT
+            }
+            val alignTogglePendingIntent = PendingIntent.getBroadcast(
+                context,
+                1002,
+                toggleAlignIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alignIconRes = if (isCentered) R.drawable.ic_format_align_center else R.drawable.ic_format_align_left
+
             // 1. Tiny (1x1 or smallest shrinked): icon + countdown only
             val tinyViews = buildViews(
                 context,
@@ -156,27 +178,31 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 appPendingIntent
             )
 
-            // 3. Medium wide (3x1, 4x1): icon + countdown + concise day/time
+            // 3. Medium wide (3x1, 4x1): icon + countdown + concise day/time + alignment toggle
             val mediumViews = buildViews(
                 context,
                 mediumLayout,
                 countdownText,
                 shortTargetDateTimeText,
                 clockPendingIntent,
-                appPendingIntent
+                appPendingIntent,
+                alignTogglePendingIntent,
+                alignIconRes
             )
 
-            // 4. Large (2x2, 3x2, etc.): full header, large countdown, full day/time
+            // 4. Large (2x2, 3x2, etc.): full header, large countdown, full day/time + alignment toggle
             val largeViews = buildViews(
                 context,
                 largeLayout,
                 countdownText,
                 fullTargetDateTimeText,
                 clockPendingIntent,
-                appPendingIntent
+                appPendingIntent,
+                alignTogglePendingIntent,
+                alignIconRes
             )
 
-            // 5. Tall / Expanded (vertically expanded: 2x3, 3x3, 4x2+): confirmed + upcoming predicted alarms
+            // 5. Tall / Expanded (vertically expanded: 2x3, 3x3, 4x2+): confirmed + upcoming predicted alarms + alignment toggle
             val tallViews = RemoteViews(context.packageName, tallLayout).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
                 setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
@@ -190,6 +216,12 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 } catch (ignored: Exception) {}
                 try {
                     setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
+                } catch (ignored: Exception) {}
+
+                // Alignment toggle button
+                try {
+                    setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
+                    setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
                 } catch (ignored: Exception) {}
 
                 // Alarm countdown and target time tap -> Google Clock

@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Top header: Alarm icon and title -->
+        <!-- Top header: Alarm icon, title and alignment toggle -->
         <LinearLayout
             android:id="@+id/widget_header"
             android:layout_width="match_parent"
@@ -31,15 +31,24 @@
 
             <TextView
                 android:id="@+id/widget_title"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="1"
                 android:text="CONFIRMED NEXT"
                 android:textColor="@color/widget_on_surface_variant"
                 android:textSize="11sp" />
+
+            <ImageView
+                android:id="@+id/widget_btn_align_toggle"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:padding="2dp"
+                android:contentDescription="@string/widget_alignment_title"
+                android:src="@drawable/ic_format_align_left" />
         </LinearLayout>
 
         <!-- Main countdown center text -->

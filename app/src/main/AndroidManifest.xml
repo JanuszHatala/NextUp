@@ -43,6 +43,7 @@
             <intent-filter>
                 <action android:name="com.nextup.alarmcountdown.ACTION_REFRESH_WIDGET" />
                 <action android:name="com.nextup.alarmcountdown.ACTION_REFRESH_NOTIFICATION" />
+                <action android:name="com.nextup.alarmcountdown.ACTION_TOGGLE_WIDGET_ALIGNMENT" />
                 <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

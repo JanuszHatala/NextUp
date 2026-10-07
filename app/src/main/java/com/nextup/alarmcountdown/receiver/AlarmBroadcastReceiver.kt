@@ -16,10 +16,22 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_REFRESH_WIDGET = "com.nextup.alarmcountdown.ACTION_REFRESH_WIDGET"
         const val ACTION_REFRESH_NOTIFICATION = "com.nextup.alarmcountdown.ACTION_REFRESH_NOTIFICATION"
+        const val ACTION_TOGGLE_WIDGET_ALIGNMENT = "com.nextup.alarmcountdown.ACTION_TOGGLE_WIDGET_ALIGNMENT"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
+            ACTION_TOGGLE_WIDGET_ALIGNMENT -> {
+                val prefs = com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context)
+                val current = prefs.widgetAlignment
+                val nextAlignment = if (current == com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER) {
+                    com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_LEFT
+                } else {
+                    com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER
+                }
+                prefs.widgetAlignment = nextAlignment
+                NextUpWidgetProvider.updateAllWidgets(context)
+            }
             ACTION_REFRESH_WIDGET,
             ACTION_REFRESH_NOTIFICATION,
             AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED,
