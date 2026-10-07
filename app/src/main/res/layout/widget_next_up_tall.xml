@@ -14,39 +14,48 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Top header: Alarm icon, title and alignment toggle -->
+        <!-- Top bar: Header (App) + Alignment toggle button -->
         <LinearLayout
-            android:id="@+id/widget_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <ImageView
-                android:id="@+id/widget_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:contentDescription="@string/app_name"
-                android:src="@drawable/ic_alarm" />
-
-            <TextView
-                android:id="@+id/widget_title"
+            <!-- Clickable App Header (icon + title) -->
+            <LinearLayout
+                android:id="@+id/widget_header"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:ellipsize="end"
-                android:fontFamily="sans-serif-medium"
-                android:maxLines="1"
-                android:text="CONFIRMED NEXT"
-                android:textColor="@color/widget_on_surface_variant"
-                android:textSize="11sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
+                <ImageView
+                    android:id="@+id/widget_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_alarm" />
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text="CONFIRMED NEXT"
+                    android:textColor="@color/widget_on_surface_variant"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- Generous 48dp x 48dp touch target for Alignment Toggle -->
             <ImageView
                 android:id="@+id/widget_btn_align_toggle"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:padding="2dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
                 android:contentDescription="@string/widget_alignment_title"
                 android:src="@drawable/ic_format_align_left" />
         </LinearLayout>

@@ -232,7 +232,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
                 } catch (ignored: Exception) {}
                 try {
-                    setOnClickPendingIntent(R.id.widget_icon, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
                 } catch (ignored: Exception) {}
 
                 // Routine subheader tap -> NextUp App

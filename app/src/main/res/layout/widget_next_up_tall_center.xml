@@ -14,22 +14,22 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Top header: Centered alarm icon and title with alignment toggle -->
+        <!-- Top bar: Balance spacer on left, centered header (App), and 48dp toggle button on right -->
         <LinearLayout
-            android:id="@+id/widget_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <!-- 24dp invisible balance spacer on left -->
+            <!-- 48dp invisible balance spacer on left -->
             <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:contentDescription="@null" />
 
-            <!-- Centered icon and title -->
+            <!-- Centered icon and title (Clickable App Header) -->
             <LinearLayout
+                android:id="@+id/widget_header"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -56,11 +56,12 @@
                     android:textSize="11sp" />
             </LinearLayout>
 
+            <!-- Generous 48dp x 48dp touch target for Alignment Toggle -->
             <ImageView
                 android:id="@+id/widget_btn_align_toggle"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:padding="2dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
                 android:contentDescription="@string/widget_alignment_title"
                 android:src="@drawable/ic_format_align_center" />
         </LinearLayout>
