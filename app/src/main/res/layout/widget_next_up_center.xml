@@ -6,7 +6,7 @@
     android:background="@drawable/widget_background"
     android:padding="12dp">
 
-    <!-- Top bar: Balance spacer on left, centered header (App), and 48dp toggle button on right -->
+    <!-- Top bar: Header (App) + Alignment toggle button -->
     <LinearLayout
         android:id="@+id/widget_top_bar"
         android:layout_width="match_parent"
@@ -14,18 +14,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <!-- 48dp invisible balance spacer on left -->
-        <ImageView
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:contentDescription="@null" />
-
+        <!-- Clickable App Header (icon + title) -->
         <LinearLayout
             android:id="@+id/widget_header"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="center"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <ImageView
@@ -43,17 +38,17 @@
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="1"
-                android:text="@string/nearest_alarm_title"
+                android:text="@string/app_name"
                 android:textColor="@color/widget_on_surface_variant"
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Generous 48dp x 48dp touch target for Alignment Toggle -->
+        <!-- Touch target for Alignment Toggle -->
         <ImageView
             android:id="@+id/widget_btn_align_toggle"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:padding="12dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
             android:contentDescription="@string/widget_alignment_title"
             android:src="@drawable/ic_format_align_center" />
     </LinearLayout>
@@ -72,7 +67,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:autoSizeMaxTextSize="38sp"
-            android:autoSizeMinTextSize="14sp"
+            android:autoSizeMinTextSize="16sp"
             android:autoSizeStepGranularity="1sp"
             android:autoSizeTextType="uniform"
             android:ellipsize="none"
@@ -88,10 +83,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:ellipsize="end"
+            android:ellipsize="none"
             android:fontFamily="sans-serif"
             android:gravity="center"
-            android:maxLines="1"
+            android:maxLines="2"
             android:text=""
             android:textColor="@color/widget_on_surface_variant"
             android:textSize="13sp" />

@@ -75,7 +75,11 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 } catch (ignored: Exception) {
                 }
 
-                // Tap header or title -> NextUp App
+                // Tap top bar, header, or title -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
+                } catch (ignored: Exception) {
+                }
                 try {
                     setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
                 } catch (ignored: Exception) {
@@ -168,14 +172,16 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 appPendingIntent
             )
 
-            // 2. Compact wide (2x1): icon + countdown + concise shortcut day/time
+            // 2. Compact wide (2x1): icon + countdown + concise shortcut day/time + alignment toggle
             val compactWideViews = buildViews(
                 context,
                 compactWideLayout,
                 countdownText,
                 shortTargetDateTimeText,
                 clockPendingIntent,
-                appPendingIntent
+                appPendingIntent,
+                alignTogglePendingIntent,
+                alignIconRes
             )
 
             // 3. Medium wide (3x1, 4x1): icon + countdown + concise day/time + alignment toggle
@@ -211,6 +217,9 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
 
                 // Top header / title tap -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
+                } catch (ignored: Exception) {}
                 try {
                     setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
                 } catch (ignored: Exception) {}
@@ -303,8 +312,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                         SizeF(40f, 40f) to tinyViews,
                         SizeF(100f, 40f) to compactWideViews,
                         SizeF(180f, 40f) to mediumViews,
-                        SizeF(120f, 75f) to largeViews,
-                        SizeF(120f, 110f) to tallViews
+                        SizeF(100f, 100f) to largeViews,
+                        SizeF(100f, 180f) to tallViews
                     )
                 )
             } else {
@@ -312,8 +321,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
                 val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
                 when {
-                    minHeight >= 110 -> tallViews
-                    minHeight >= 75 -> largeViews
+                    minHeight >= 180 -> tallViews
+                    minHeight >= 100 -> largeViews
                     minWidth >= 180 -> mediumViews
                     minWidth >= 100 -> compactWideViews
                     else -> tinyViews
