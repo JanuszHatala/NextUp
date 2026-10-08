@@ -36,6 +36,12 @@
                 android:resource="@xml/next_up_widget_info" />
         </receiver>
 
+        <!-- RemoteViews Service for Scrollable Routine ListView -->
+        <service
+            android:name=".widget.NextUpWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
         <!-- System Alarm & Time Change Listener -->
         <receiver
             android:name=".receiver.AlarmBroadcastReceiver"

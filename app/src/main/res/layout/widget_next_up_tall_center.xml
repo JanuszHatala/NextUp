@@ -114,148 +114,32 @@
         android:textColor="@color/widget_on_surface_variant"
         android:textSize="10sp" />
 
-    <!-- Predicted Rows (Dynamically shown up to 8 based on widget height) -->
-    <!-- Predicted Row 1 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_1"
+    <!-- Scrollable collection of upcoming routine alarms (hidden scrollbars) -->
+    <ListView
+        android:id="@+id/widget_alarms_list"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:fadingEdge="none"
+        android:nestedScrollingEnabled="true"
+        android:scrollbars="none" />
 
-    <!-- Predicted Row 2 -->
+    <!-- Empty state shown when no routine patterns are active -->
     <TextView
-        android:id="@+id/widget_predicted_row_2"
+        android:id="@+id/widget_predicted_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 3 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 4 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 5 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_5"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 6 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_6"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 7 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_7"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Predicted Row 8 -->
-    <TextView
-        android:id="@+id/widget_predicted_row_8"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp"
-        android:visibility="gone" />
-
-    <!-- Additional Alarms Counter -->
-    <TextView
-        android:id="@+id/widget_predicted_more"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
         android:includeFontPadding="false"
         android:maxLines="1"
         android:singleLine="true"
-        android:text=""
+        android:text="Learning weekly routine..."
         android:textColor="@color/widget_primary"
         android:textSize="10sp"
         android:visibility="gone" />

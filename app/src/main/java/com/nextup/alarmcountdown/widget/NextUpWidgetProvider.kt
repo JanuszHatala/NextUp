@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
@@ -28,6 +29,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_alarms_list)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -48,6 +50,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 for (widgetId in appWidgetIds) {
                     updateWidget(context, appWidgetManager, widgetId)
                 }
+                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_alarms_list)
             }
         }
 
@@ -105,29 +108,16 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private val PREDICTED_ROW_IDS = intArrayOf(
-            R.id.widget_predicted_row_1,
-            R.id.widget_predicted_row_2,
-            R.id.widget_predicted_row_3,
-            R.id.widget_predicted_row_4,
-            R.id.widget_predicted_row_5,
-            R.id.widget_predicted_row_6,
-            R.id.widget_predicted_row_7,
-            R.id.widget_predicted_row_8
-        )
-
         private fun buildTallViews(
             context: Context,
             layoutId: Int,
-            maxItems: Int,
+            appWidgetId: Int,
             countdownText: String,
             fullTargetDateTimeText: String,
             clockPendingIntent: PendingIntent,
             appPendingIntent: PendingIntent,
             alignTogglePendingIntent: PendingIntent,
-            alignIconRes: Int,
-            activePatterns: List<com.nextup.alarmcountdown.data.model.AlarmPattern>,
-            nextAlarm: com.nextup.alarmcountdown.data.AlarmModel?
+            alignIconRes: Int
         ): RemoteViews {
             return RemoteViews(context.packageName, layoutId).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
@@ -169,51 +159,14 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setOnClickPendingIntent(R.id.widget_section_predicted, appPendingIntent)
                 } catch (ignored: Exception) {}
 
-                if (activePatterns.isEmpty()) {
-                    for (rowId in PREDICTED_ROW_IDS) {
-                        setViewVisibility(rowId, android.view.View.GONE)
-                    }
-                    setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
-                    setTextViewText(R.id.widget_predicted_more, "Learning weekly routine...")
-                    setOnClickPendingIntent(R.id.widget_predicted_more, clockPendingIntent)
-                } else {
-                    val showCount = if (activePatterns.size <= maxItems) {
-                        activePatterns.size.coerceAtMost(PREDICTED_ROW_IDS.size)
-                    } else {
-                        (maxItems - 1).coerceAtMost(PREDICTED_ROW_IDS.size)
-                    }
-
-                    val now = System.currentTimeMillis()
-                    val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
-                    val fromTime = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
-
-                    for (i in PREDICTED_ROW_IDS.indices) {
-                        if (i < showCount) {
-                            val pattern = activePatterns[i]
-                            val occurrenceTime = pattern.getNextOccurrenceMillis(fromTime)
-                            val text = AlarmFormatter.formatRoutineLine(
-                                pattern.dayNameShort,
-                                pattern.timeFormatted,
-                                occurrenceTime,
-                                now
-                            )
-                            setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.VISIBLE)
-                            setTextViewText(PREDICTED_ROW_IDS[i], text)
-                            setOnClickPendingIntent(PREDICTED_ROW_IDS[i], clockPendingIntent)
-                        } else {
-                            setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.GONE)
-                        }
-                    }
-
-                    val remainingCount = activePatterns.size - showCount
-                    if (remainingCount > 0) {
-                        setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
-                        setTextViewText(R.id.widget_predicted_more, "+$remainingCount more in NextUp")
-                        setOnClickPendingIntent(R.id.widget_predicted_more, appPendingIntent)
-                    } else {
-                        setViewVisibility(R.id.widget_predicted_more, android.view.View.GONE)
-                    }
+                // Bind RemoteViewsService collection adapter for smooth touch-scrolling
+                val serviceIntent = Intent(context, NextUpWidgetService::class.java).apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                    data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
                 }
+                setRemoteAdapter(R.id.widget_alarms_list, serviceIntent)
+                setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty)
+                setPendingIntentTemplate(R.id.widget_alarms_list, clockPendingIntent)
             }
         }
 
@@ -320,139 +273,29 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 alignIconRes
             )
 
-            // 5. Tall / Expanded: Dynamically generated with 2, 3, 4, 6, or 8 items based on widget height
-            val dbManager = com.nextup.alarmcountdown.data.db.AlarmDatabaseManager(context)
-            val activePatterns = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                val allActive = dbManager.getAllPatterns().filter { it.isActive }
-                val now = System.currentTimeMillis()
-                val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
-                val fromTime = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
-
-                // Filter out the pattern that matches current active alarm
-                val filtered = if (hasActiveAlarm) {
-                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
-                    val cPatternId = com.nextup.alarmcountdown.data.model.AlarmPattern.buildPatternId(
-                        cal.get(java.util.Calendar.DAY_OF_WEEK),
-                        cal.get(java.util.Calendar.HOUR_OF_DAY),
-                        cal.get(java.util.Calendar.MINUTE)
-                    )
-                    allActive.filter { it.patternId != cPatternId }
-                } else {
-                    allActive
-                }
-
-                // Sort chronologically starting from the current active alarm (or now if no active alarm)
-                filtered.sortedBy { it.getNextOccurrenceMillis(fromTime) }
-            }
-
-            // 5. Tall / Expanded: Dynamically generated with 2..8 items based on widget height
-            val tallViews2 = buildTallViews(
+            // 5. Tall / Expanded: Dynamically driven by ListView collection widget (scrollable, no scrollbars)
+            val tallViews = buildTallViews(
                 context = context,
                 layoutId = tallLayout,
-                maxItems = 2,
+                appWidgetId = appWidgetId,
                 countdownText = countdownText,
                 fullTargetDateTimeText = fullTargetDateTimeText,
                 clockPendingIntent = clockPendingIntent,
                 appPendingIntent = appPendingIntent,
                 alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews3 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 3,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews4 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 4,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews5 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 5,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews6 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 6,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews7 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 7,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
-            )
-            val tallViews8 = buildTallViews(
-                context = context,
-                layoutId = tallLayout,
-                maxItems = 8,
-                countdownText = countdownText,
-                fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
-                appPendingIntent = appPendingIntent,
-                alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes,
-                activePatterns = activePatterns,
-                nextAlarm = nextAlarm
+                alignIconRes = alignIconRes
             )
 
             val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Responsive layout: system automatically selects best layout as widget is resized
+                // Responsive layout: maps standard form-factor archetypes.
+                // tallViews with its scrollable ListView automatically handles ANY height >= 150dp!
                 RemoteViews(
                     mapOf(
                         SizeF(40f, 40f) to tinyViews,
                         SizeF(100f, 40f) to compactWideViews,
                         SizeF(180f, 40f) to mediumViews,
                         SizeF(100f, 100f) to largeViews,
-                        SizeF(100f, 150f) to tallViews2,
-                        SizeF(100f, 170f) to tallViews3,
-                        SizeF(100f, 190f) to tallViews4,
-                        SizeF(100f, 210f) to tallViews5,
-                        SizeF(100f, 230f) to tallViews6,
-                        SizeF(100f, 250f) to tallViews7,
-                        SizeF(100f, 265f) to tallViews8
+                        SizeF(100f, 150f) to tallViews
                     )
                 )
             } else {
@@ -460,13 +303,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
                 val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
                 when {
-                    minHeight >= 265 -> tallViews8
-                    minHeight >= 250 -> tallViews7
-                    minHeight >= 230 -> tallViews6
-                    minHeight >= 210 -> tallViews5
-                    minHeight >= 190 -> tallViews4
-                    minHeight >= 170 -> tallViews3
-                    minHeight >= 150 -> tallViews2
+                    minHeight >= 150 -> tallViews
                     minHeight >= 100 -> largeViews
                     minWidth >= 180 -> mediumViews
                     minWidth >= 100 -> compactWideViews
@@ -475,6 +312,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
+            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_alarms_list)
 
             // Auto-refresh exactly when the alarm is due to ring
             val triggerTime = nextAlarm?.triggerTimeMillis
