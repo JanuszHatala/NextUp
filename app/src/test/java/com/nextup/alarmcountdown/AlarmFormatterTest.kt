@@ -99,14 +99,14 @@ class AlarmFormatterTest {
     fun testFormatRoutineLine() {
         val sixDaysSeventeenHours = (6 * 24 * 60 + 17 * 60 + 24) * 60_000L
         val formatted = AlarmFormatter.formatRoutineLine("Thu", "05:00", baseNow + sixDaysSeventeenHours, baseNow)
-        assertEquals("Thu 05:00 • in 6d 17h EST", formatted)
+        assertEquals("Thu 05:00 • in 6d 17h", formatted)
 
         val nineHoursFortyTwoMins = (9 * 60 + 42) * 60_000L
         val formattedToday = AlarmFormatter.formatRoutineLine("Fri", "05:00", baseNow + nineHoursFortyTwoMins, baseNow)
-        assertEquals("Fri 05:00 • in 9h 42m EST", formattedToday)
+        assertEquals("Fri 05:00 • in 9h 42m", formattedToday)
 
         val pastTrigger = baseNow - 120_000L
         val formattedPast = AlarmFormatter.formatRoutineLine("Sat", "08:00", pastTrigger, baseNow)
-        assertEquals("Sat 08:00 EST", formattedPast)
+        assertEquals("Sat 08:00", formattedPast)
     }
 }

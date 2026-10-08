@@ -76,6 +76,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.core.content.pm.PackageInfoCompat
 import com.nextup.alarmcountdown.data.AlarmModel
 import com.nextup.alarmcountdown.data.AlarmRepository
 import com.nextup.alarmcountdown.data.NextUpPreferences
@@ -570,6 +571,7 @@ fun SettingsScreen(
             WidgetSettingsCard(
                 widgetAlignment = widgetAlignment,
                 onSetAlignment = { alignment ->
+                    com.nextup.alarmcountdown.util.NextUpLog.i("MainActivity", "User selected alignment in Settings: $alignment")
                     prefs.widgetAlignment = alignment
                     NextUpWidgetProvider.updateAllWidgets(context.applicationContext)
                 },
@@ -1185,8 +1187,25 @@ fun NotificationSettingsCard(
 
 @Composable
 fun FooterInfo(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val (versionName, versionCode) = remember(context) {
+        try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            val name = packageInfo.versionName ?: "1.2.0"
+            val code = PackageInfoCompat.getLongVersionCode(packageInfo)
+            Pair(name, code)
+        } catch (e: Exception) {
+            Pair("1.2.0", 3L)
+        }
+    }
+
     Text(
-        text = "NextUp v1.1.0 (Build 2) • Open Source (GPLv3)",
+        text = "NextUp v$versionName (Build $versionCode) • Open Source (GPLv3)",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.outline,
         textAlign = TextAlign.Center,

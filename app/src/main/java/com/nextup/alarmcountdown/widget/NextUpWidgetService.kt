@@ -15,20 +15,26 @@ import java.util.Calendar
 
 class NextUpWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        return NextUpWidgetFactory(applicationContext)
+        return NextUpWidgetFactory(applicationContext, intent)
     }
 }
 
-class NextUpWidgetFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
+class NextUpWidgetFactory(
+    private val context: Context,
+    private val intent: Intent? = null
+) : RemoteViewsService.RemoteViewsFactory {
 
     private val dbManager = AlarmDatabaseManager(context)
     private val repository = AlarmRepository(context)
     private val patterns = mutableListOf<AlarmPattern>()
     private var fromTimeMillis = System.currentTimeMillis()
-    private var isCentered = false
+    private var isCentered: Boolean = false
 
     override fun onCreate() {
-        // Initialization
+        val prefs = NextUpPreferences.getInstance(context)
+        prefs.syncFromDisk()
+        isCentered = prefs.widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
+        com.nextup.alarmcountdown.util.NextUpLog.i("WidgetFactory", "onCreate: isCentered=$isCentered")
     }
 
     override fun onDataSetChanged() {
@@ -61,6 +67,7 @@ class NextUpWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         patterns.clear()
         // Sort chronologically starting from the active alarm trigger time (or now)
         patterns.addAll(filtered.sortedBy { it.getNextOccurrenceMillis(fromTimeMillis) })
+        com.nextup.alarmcountdown.util.NextUpLog.i("WidgetFactory", "onDataSetChanged: isCentered=$isCentered, patternsCount=${patterns.size}")
     }
 
     override fun onDestroy() {
@@ -81,21 +88,31 @@ class NextUpWidgetFactory(private val context: Context) : RemoteViewsService.Rem
             System.currentTimeMillis()
         )
 
-        val layoutId = if (isCentered) {
-            R.layout.widget_item_routine_center
-        } else {
-            R.layout.widget_item_routine_left
-        }
+        val currentCentered = NextUpPreferences.getInstance(context).widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
-        return RemoteViews(context.packageName, layoutId).apply {
-            setTextViewText(R.id.widget_item_routine_text, text)
-            setOnClickFillInIntent(R.id.widget_item_routine_text, Intent())
+        com.nextup.alarmcountdown.util.NextUpLog.d(
+            "WidgetFactory",
+            "getViewAt(pos=$position): currentCentered=$currentCentered, text='$text'"
+        )
+
+        return RemoteViews(context.packageName, R.layout.widget_item_routine).apply {
+            if (currentCentered) {
+                setViewVisibility(R.id.widget_item_routine_text_left, android.view.View.GONE)
+                setViewVisibility(R.id.widget_item_routine_text_center, android.view.View.VISIBLE)
+                setTextViewText(R.id.widget_item_routine_text_center, text)
+                setOnClickFillInIntent(R.id.widget_item_routine_text_center, Intent())
+            } else {
+                setViewVisibility(R.id.widget_item_routine_text_center, android.view.View.GONE)
+                setViewVisibility(R.id.widget_item_routine_text_left, android.view.View.VISIBLE)
+                setTextViewText(R.id.widget_item_routine_text_left, text)
+                setOnClickFillInIntent(R.id.widget_item_routine_text_left, Intent())
+            }
         }
     }
 
     override fun getLoadingView(): RemoteViews? = null
 
-    override fun getViewTypeCount(): Int = 2
+    override fun getViewTypeCount(): Int = 1
 
     override fun getItemId(position: Int): Long = position.toLong()
 
