@@ -85,8 +85,15 @@ import com.nextup.alarmcountdown.notification.AlarmNotificationManager
 import com.nextup.alarmcountdown.ui.theme.NextUpTheme
 import com.nextup.alarmcountdown.util.AlarmFormatter
 import com.nextup.alarmcountdown.widget.NextUpWidgetProvider
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+enum class AppScreen {
+    MAIN,
+    SETTINGS
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -103,15 +110,31 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NextUpTheme {
-                MainScreen(
-                    repository = repository,
-                    dbManager = dbManager,
-                    prefs = prefs,
-                    onOpenClock = { openClockApp(repository.getNextAlarm()) },
-                    onSetAlarm = { openSetAlarmScreen() },
-                    onSetPatternInClock = { pattern -> setPatternInClock(pattern) },
-                    onPinWidget = { pinWidgetToHomeScreen() }
-                )
+                var currentScreen by rememberSaveable { mutableStateOf(AppScreen.MAIN) }
+
+                BackHandler(enabled = currentScreen != AppScreen.MAIN) {
+                    currentScreen = AppScreen.MAIN
+                }
+
+                when (currentScreen) {
+                    AppScreen.MAIN -> {
+                        MainScreen(
+                            repository = repository,
+                            dbManager = dbManager,
+                            onOpenClock = { openClockApp(repository.getNextAlarm()) },
+                            onSetAlarm = { openSetAlarmScreen() },
+                            onSetPatternInClock = { pattern -> setPatternInClock(pattern) },
+                            onOpenSettings = { currentScreen = AppScreen.SETTINGS }
+                        )
+                    }
+                    AppScreen.SETTINGS -> {
+                        SettingsScreen(
+                            prefs = prefs,
+                            onBackClick = { currentScreen = AppScreen.MAIN },
+                            onPinWidget = { pinWidgetToHomeScreen() }
+                        )
+                    }
+                }
             }
         }
     }
@@ -244,40 +267,16 @@ fun isWidgetAdded(context: Context): Boolean {
 fun MainScreen(
     repository: AlarmRepository,
     dbManager: AlarmDatabaseManager,
-    prefs: NextUpPreferences,
     onOpenClock: () -> Unit,
     onSetAlarm: () -> Unit,
     onSetPatternInClock: (AlarmPattern) -> Unit,
-    onPinWidget: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val nextAlarm by repository.observeNextAlarm().collectAsStateWithLifecycle(initialValue = repository.getNextAlarm())
 
     var learnedPatterns by remember { mutableStateOf<List<AlarmPattern>>(emptyList()) }
-    var isWidgetPinned by remember { mutableStateOf(isWidgetAdded(context)) }
-
-    val isNotificationEnabled by prefs.isNotificationEnabledFlow.collectAsStateWithLifecycle()
-    val isStatusBarInfoEnabled by prefs.isStatusBarInfoEnabledFlow.collectAsStateWithLifecycle()
-    val widgetAlignment by prefs.widgetAlignmentFlow.collectAsStateWithLifecycle()
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            prefs.isNotificationEnabled = true
-            AlarmNotificationManager.updateNotification(context)
-        } else {
-            prefs.isNotificationEnabled = false
-            AlarmNotificationManager.cancelNotification(context)
-        }
-    }
-
-    LifecycleResumeEffect(Unit) {
-        prefs.syncFromDisk()
-        isWidgetPinned = isWidgetAdded(context)
-        onPauseOrDispose { }
-    }
 
     fun refreshPatterns() {
         coroutineScope.launch {
@@ -313,8 +312,7 @@ fun MainScreen(
             TopAppBar(
                 title = {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
@@ -338,6 +336,15 @@ fun MainScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings),
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -353,7 +360,7 @@ fun MainScreen(
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Left Column: Nearest Alarm hero card + Action buttons + Notification Card
+                // Left Column: Nearest Alarm hero card + Action buttons
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -374,37 +381,9 @@ fun MainScreen(
                         onOpenClock = onOpenClock,
                         onSetAlarm = onSetAlarm
                     )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    NotificationSettingsCard(
-                        isNotificationEnabled = isNotificationEnabled,
-                        isStatusBarInfoEnabled = isStatusBarInfoEnabled,
-                        onToggleNotification = { enabled ->
-                            if (enabled) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                ) {
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    prefs.isNotificationEnabled = true
-                                    AlarmNotificationManager.updateNotification(context)
-                                }
-                            } else {
-                                prefs.isNotificationEnabled = false
-                                AlarmNotificationManager.cancelNotification(context)
-                            }
-                        },
-                        onToggleStatusBarInfo = { enabled ->
-                            prefs.isStatusBarInfoEnabled = enabled
-                            if (prefs.isNotificationEnabled) {
-                                AlarmNotificationManager.updateNotification(context)
-                            }
-                        }
-                    )
                 }
 
-                // Right Column: Weekly Schedule & Predictions + Optional Widget promo + Footer
+                // Right Column: Weekly Schedule & Predictions
                 Column(
                     modifier = Modifier
                         .weight(1.2f)
@@ -433,26 +412,6 @@ fun MainScreen(
                             }
                         }
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    WidgetSettingsCard(
-                        widgetAlignment = widgetAlignment,
-                        onSetAlignment = { alignment ->
-                            prefs.widgetAlignment = alignment
-                            NextUpWidgetProvider.updateAllWidgets(context)
-                        },
-                        isWidgetPinned = isWidgetPinned,
-                        onPinWidget = {
-                            onPinWidget()
-                            isWidgetPinned = isWidgetAdded(context)
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    FooterInfo()
-
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         } else {
@@ -480,35 +439,7 @@ fun MainScreen(
                     onSetAlarm = onSetAlarm
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NotificationSettingsCard(
-                    isNotificationEnabled = isNotificationEnabled,
-                    isStatusBarInfoEnabled = isStatusBarInfoEnabled,
-                    onToggleNotification = { enabled ->
-                        if (enabled) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                prefs.isNotificationEnabled = true
-                                AlarmNotificationManager.updateNotification(context)
-                            }
-                        } else {
-                            prefs.isNotificationEnabled = false
-                            AlarmNotificationManager.cancelNotification(context)
-                        }
-                    },
-                    onToggleStatusBarInfo = { enabled ->
-                        prefs.isStatusBarInfoEnabled = enabled
-                        if (prefs.isNotificationEnabled) {
-                            AlarmNotificationManager.updateNotification(context)
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 WeeklyScheduleSection(
                     learnedPatterns = learnedPatterns,
@@ -532,26 +463,128 @@ fun MainScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
-                WidgetSettingsCard(
-                    widgetAlignment = widgetAlignment,
-                    onSetAlignment = { alignment ->
-                        prefs.widgetAlignment = alignment
-                        NextUpWidgetProvider.updateAllWidgets(context)
-                    },
-                    isWidgetPinned = isWidgetPinned,
-                    onPinWidget = {
-                        onPinWidget()
-                        isWidgetPinned = isWidgetAdded(context)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                FooterInfo()
-
-                Spacer(modifier = Modifier.height(30.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    prefs: NextUpPreferences,
+    onBackClick: () -> Unit,
+    onPinWidget: () -> Unit
+) {
+    val context = LocalContext.current
+    var isWidgetPinned by remember { mutableStateOf(isWidgetAdded(context)) }
+
+    val isNotificationEnabled by prefs.isNotificationEnabledFlow.collectAsStateWithLifecycle()
+    val isStatusBarInfoEnabled by prefs.isStatusBarInfoEnabledFlow.collectAsStateWithLifecycle()
+    val widgetAlignment by prefs.widgetAlignmentFlow.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            prefs.isNotificationEnabled = true
+            AlarmNotificationManager.updateNotification(context)
+        } else {
+            prefs.isNotificationEnabled = false
+            AlarmNotificationManager.cancelNotification(context)
+        }
+    }
+
+    LifecycleResumeEffect(Unit) {
+        prefs.syncFromDisk()
+        isWidgetPinned = isWidgetAdded(context)
+        onPauseOrDispose { }
+    }
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Settings",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_arrow_back),
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = if (isLandscape) 32.dp else 20.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            NotificationSettingsCard(
+                isNotificationEnabled = isNotificationEnabled,
+                isStatusBarInfoEnabled = isStatusBarInfoEnabled,
+                onToggleNotification = { enabled ->
+                    if (enabled) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            prefs.isNotificationEnabled = true
+                            AlarmNotificationManager.updateNotification(context)
+                        }
+                    } else {
+                        prefs.isNotificationEnabled = false
+                        AlarmNotificationManager.cancelNotification(context)
+                    }
+                },
+                onToggleStatusBarInfo = { enabled ->
+                    prefs.isStatusBarInfoEnabled = enabled
+                    if (prefs.isNotificationEnabled) {
+                        AlarmNotificationManager.updateNotification(context)
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            WidgetSettingsCard(
+                widgetAlignment = widgetAlignment,
+                onSetAlignment = { alignment ->
+                    prefs.widgetAlignment = alignment
+                    NextUpWidgetProvider.updateAllWidgets(context)
+                },
+                isWidgetPinned = isWidgetPinned,
+                onPinWidget = {
+                    onPinWidget()
+                    isWidgetPinned = isWidgetAdded(context)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            FooterInfo()
+
+            Spacer(modifier = Modifier.height(30.dp))
         }
     }
 }

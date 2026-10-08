@@ -105,6 +105,124 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        private val PREDICTED_ROW_IDS = intArrayOf(
+            R.id.widget_predicted_row_1,
+            R.id.widget_predicted_row_2,
+            R.id.widget_predicted_row_3,
+            R.id.widget_predicted_row_4,
+            R.id.widget_predicted_row_5,
+            R.id.widget_predicted_row_6,
+            R.id.widget_predicted_row_7,
+            R.id.widget_predicted_row_8
+        )
+        private val PREDICTED_TEXT_IDS = intArrayOf(
+            R.id.widget_predicted_1_text,
+            R.id.widget_predicted_2_text,
+            R.id.widget_predicted_3_text,
+            R.id.widget_predicted_4_text,
+            R.id.widget_predicted_5_text,
+            R.id.widget_predicted_6_text,
+            R.id.widget_predicted_7_text,
+            R.id.widget_predicted_8_text
+        )
+
+        private fun buildTallViews(
+            context: Context,
+            layoutId: Int,
+            maxItems: Int,
+            countdownText: String,
+            fullTargetDateTimeText: String,
+            clockPendingIntent: PendingIntent,
+            appPendingIntent: PendingIntent,
+            alignTogglePendingIntent: PendingIntent,
+            alignIconRes: Int,
+            activePatterns: List<com.nextup.alarmcountdown.data.model.AlarmPattern>,
+            nextAlarm: com.nextup.alarmcountdown.data.AlarmModel?
+        ): RemoteViews {
+            return RemoteViews(context.packageName, layoutId).apply {
+                setTextViewText(R.id.widget_countdown, countdownText)
+                setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
+
+                // Root card tap default -> Google Clock
+                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+
+                // Top header / title tap -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
+                } catch (ignored: Exception) {}
+                try {
+                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
+                } catch (ignored: Exception) {}
+                try {
+                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
+                } catch (ignored: Exception) {}
+
+                // Alignment toggle button
+                try {
+                    setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
+                    setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
+                } catch (ignored: Exception) {}
+
+                // Alarm countdown and target time tap -> Google Clock
+                try {
+                    setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
+                } catch (ignored: Exception) {}
+                try {
+                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
+                } catch (ignored: Exception) {}
+                try {
+                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
+                } catch (ignored: Exception) {}
+
+                // Routine subheader tap -> NextUp App
+                try {
+                    setOnClickPendingIntent(R.id.widget_section_predicted, appPendingIntent)
+                } catch (ignored: Exception) {}
+
+                if (activePatterns.isEmpty()) {
+                    for (rowId in PREDICTED_ROW_IDS) {
+                        setViewVisibility(rowId, android.view.View.GONE)
+                    }
+                    setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
+                    setTextViewText(R.id.widget_predicted_more, "Learning weekly routine...")
+                    setOnClickPendingIntent(R.id.widget_predicted_more, clockPendingIntent)
+                } else {
+                    val showCount = if (activePatterns.size <= maxItems) {
+                        activePatterns.size.coerceAtMost(PREDICTED_ROW_IDS.size)
+                    } else {
+                        (maxItems - 1).coerceAtMost(PREDICTED_ROW_IDS.size)
+                    }
+
+                    val now = System.currentTimeMillis()
+                    val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
+                    val fromTime = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
+
+                    for (i in PREDICTED_ROW_IDS.indices) {
+                        if (i < showCount) {
+                            val pattern = activePatterns[i]
+                            val occurrenceTime = pattern.getNextOccurrenceMillis(fromTime)
+                            val countdown = AlarmFormatter.formatRemaining(occurrenceTime, now)
+                            val text = "${pattern.dayNameShort} ${pattern.timeFormatted} • in $countdown"
+                            setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.VISIBLE)
+                            setTextViewText(PREDICTED_TEXT_IDS[i], text)
+                            setOnClickPendingIntent(PREDICTED_ROW_IDS[i], clockPendingIntent)
+                        } else {
+                            setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.GONE)
+                        }
+                    }
+
+                    val remainingCount = activePatterns.size - showCount
+                    if (remainingCount > 0) {
+                        setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
+                        setTextViewText(R.id.widget_predicted_more, "+$remainingCount more in NextUp")
+                        setOnClickPendingIntent(R.id.widget_predicted_more, appPendingIntent)
+                    } else {
+                        setViewVisibility(R.id.widget_predicted_more, android.view.View.GONE)
+                    }
+                }
+            }
+        }
+
         private fun updateWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -208,102 +326,97 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 alignIconRes
             )
 
-            // 5. Tall / Expanded (vertically expanded: 2x3, 3x3, 4x2+): confirmed + upcoming predicted alarms + alignment toggle
-            val tallViews = RemoteViews(context.packageName, tallLayout).apply {
-                setTextViewText(R.id.widget_countdown, countdownText)
-                setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
-                
-                // Root card tap default -> Google Clock
-                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+            // 5. Tall / Expanded: Dynamically generated with 2, 3, 4, 6, or 8 items based on widget height
+            val dbManager = com.nextup.alarmcountdown.data.db.AlarmDatabaseManager(context)
+            val activePatterns = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                val allActive = dbManager.getAllPatterns().filter { it.isActive }
+                val now = System.currentTimeMillis()
+                val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
+                val fromTime = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
 
-                // Top header / title tap -> NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
-                } catch (ignored: Exception) {}
-
-                // Alignment toggle button
-                try {
-                    setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
-                    setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
-                } catch (ignored: Exception) {}
-
-                // Alarm countdown and target time tap -> Google Clock
-                try {
-                    setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
-                } catch (ignored: Exception) {}
-
-                // Routine subheader tap -> NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_section_predicted, appPendingIntent)
-                } catch (ignored: Exception) {}
-
-                val dbManager = com.nextup.alarmcountdown.data.db.AlarmDatabaseManager(context)
-                val activePatterns = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                    val sorted = dbManager.getActivePatternsSorted()
-                    if (nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > 0L) {
-                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
-                        val cPatternId = com.nextup.alarmcountdown.data.model.AlarmPattern.buildPatternId(
-                            cal.get(java.util.Calendar.DAY_OF_WEEK),
-                            cal.get(java.util.Calendar.HOUR_OF_DAY),
-                            cal.get(java.util.Calendar.MINUTE)
-                        )
-                        sorted.filter { it.patternId != cPatternId }
-                    } else {
-                        sorted
-                    }
-                }
-
-                if (activePatterns.isNotEmpty()) {
-                    val p1 = activePatterns[0]
-                    val p1Next = p1.getNextOccurrenceMillis()
-                    val p1Countdown = com.nextup.alarmcountdown.util.AlarmFormatter.formatRemaining(p1Next)
-                    setViewVisibility(R.id.widget_predicted_row_1, android.view.View.VISIBLE)
-                    setTextViewText(R.id.widget_predicted_1_text, "${p1.dayNameShort} ${p1.timeFormatted} • in $p1Countdown")
-
-                    // Bottom predicted row tap -> Google Clock
-                    setOnClickPendingIntent(R.id.widget_predicted_row_1, clockPendingIntent)
-
-                    if (activePatterns.size > 1) {
-                        val p2 = activePatterns[1]
-                        val p2Next = p2.getNextOccurrenceMillis()
-                        val p2Countdown = com.nextup.alarmcountdown.util.AlarmFormatter.formatRemaining(p2Next)
-                        setViewVisibility(R.id.widget_predicted_row_2, android.view.View.VISIBLE)
-                        setTextViewText(R.id.widget_predicted_2_text, "${p2.dayNameShort} ${p2.timeFormatted} • in $p2Countdown")
-
-                        // Bottom predicted row 2 tap -> Google Clock
-                        setOnClickPendingIntent(R.id.widget_predicted_row_2, clockPendingIntent)
-                    } else {
-                        setViewVisibility(R.id.widget_predicted_row_2, android.view.View.GONE)
-                    }
-
-                    if (activePatterns.size > 2) {
-                        setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
-                        setTextViewText(R.id.widget_predicted_more, "+${activePatterns.size - 2} more in NextUp")
-                        setOnClickPendingIntent(R.id.widget_predicted_more, appPendingIntent)
-                    } else {
-                        setViewVisibility(R.id.widget_predicted_more, android.view.View.GONE)
-                    }
+                // Filter out the pattern that matches current active alarm
+                val filtered = if (hasActiveAlarm) {
+                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
+                    val cPatternId = com.nextup.alarmcountdown.data.model.AlarmPattern.buildPatternId(
+                        cal.get(java.util.Calendar.DAY_OF_WEEK),
+                        cal.get(java.util.Calendar.HOUR_OF_DAY),
+                        cal.get(java.util.Calendar.MINUTE)
+                    )
+                    allActive.filter { it.patternId != cPatternId }
                 } else {
-                    setViewVisibility(R.id.widget_predicted_row_1, android.view.View.GONE)
-                    setViewVisibility(R.id.widget_predicted_row_2, android.view.View.GONE)
-                    setViewVisibility(R.id.widget_predicted_more, android.view.View.VISIBLE)
-                    setTextViewText(R.id.widget_predicted_more, "Learning weekly routine...")
-                    // Tapping empty routine state also opens Google Clock
-                    setOnClickPendingIntent(R.id.widget_predicted_more, clockPendingIntent)
+                    allActive
                 }
+
+                // Sort chronologically starting from the current active alarm (or now if no active alarm)
+                filtered.sortedBy { it.getNextOccurrenceMillis(fromTime) }
             }
+
+            // 5. Tall / Expanded: Dynamically generated with 2, 3, 4, 6, or 8 items based on widget height
+            val tallViews2 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 2,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
+            val tallViews3 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 3,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
+            val tallViews4 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 4,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
+            val tallViews6 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 6,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
+            val tallViews8 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 8,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
 
             val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 // Responsive layout: system automatically selects best layout as widget is resized
@@ -313,7 +426,11 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                         SizeF(100f, 40f) to compactWideViews,
                         SizeF(180f, 40f) to mediumViews,
                         SizeF(100f, 100f) to largeViews,
-                        SizeF(100f, 180f) to tallViews
+                        SizeF(100f, 180f) to tallViews2,
+                        SizeF(100f, 220f) to tallViews3,
+                        SizeF(100f, 260f) to tallViews4,
+                        SizeF(100f, 310f) to tallViews6,
+                        SizeF(100f, 360f) to tallViews8
                     )
                 )
             } else {
@@ -321,7 +438,11 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
                 val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
                 when {
-                    minHeight >= 180 -> tallViews
+                    minHeight >= 360 -> tallViews8
+                    minHeight >= 310 -> tallViews6
+                    minHeight >= 260 -> tallViews4
+                    minHeight >= 220 -> tallViews3
+                    minHeight >= 180 -> tallViews2
                     minHeight >= 100 -> largeViews
                     minWidth >= 180 -> mediumViews
                     minWidth >= 100 -> compactWideViews
