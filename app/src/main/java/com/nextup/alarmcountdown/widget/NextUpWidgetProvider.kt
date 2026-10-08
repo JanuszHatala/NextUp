@@ -26,10 +26,10 @@ class NextUpWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
+        val appContext = context.applicationContext
         for (appWidgetId in appWidgetIds) {
-            updateWidget(context, appWidgetManager, appWidgetId)
+            updateWidget(appContext, appWidgetManager, appWidgetId)
         }
-        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_alarms_list)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -38,19 +38,19 @@ class NextUpWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: Bundle
     ) {
-        updateWidget(context, appWidgetManager, appWidgetId)
+        updateWidget(context.applicationContext, appWidgetManager, appWidgetId)
     }
 
     companion object {
         fun updateAllWidgets(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context) ?: return
-            val componentName = ComponentName(context, NextUpWidgetProvider::class.java)
+            val appContext = context.applicationContext
+            val appWidgetManager = AppWidgetManager.getInstance(appContext) ?: return
+            val componentName = ComponentName(appContext, NextUpWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             if (appWidgetIds != null && appWidgetIds.isNotEmpty()) {
                 for (widgetId in appWidgetIds) {
-                    updateWidget(context, appWidgetManager, widgetId)
+                    updateWidget(appContext, appWidgetManager, widgetId)
                 }
-                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_alarms_list)
             }
         }
 
@@ -117,7 +117,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             clockPendingIntent: PendingIntent,
             appPendingIntent: PendingIntent,
             alignTogglePendingIntent: PendingIntent,
-            alignIconRes: Int
+            alignIconRes: Int,
+            isCentered: Boolean
         ): RemoteViews {
             return RemoteViews(context.packageName, layoutId).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
@@ -162,7 +163,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 // Bind RemoteViewsService collection adapter for smooth touch-scrolling
                 val serviceIntent = Intent(context, NextUpWidgetService::class.java).apply {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+                    data = Uri.parse("content://com.nextup.alarmcountdown.widget/$appWidgetId?align=$isCentered")
                 }
                 setRemoteAdapter(R.id.widget_alarms_list, serviceIntent)
                 setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty)
@@ -283,7 +284,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 clockPendingIntent = clockPendingIntent,
                 appPendingIntent = appPendingIntent,
                 alignTogglePendingIntent = alignTogglePendingIntent,
-                alignIconRes = alignIconRes
+                alignIconRes = alignIconRes,
+                isCentered = isCentered
             )
 
             val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

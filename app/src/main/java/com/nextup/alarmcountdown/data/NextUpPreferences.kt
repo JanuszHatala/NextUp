@@ -58,7 +58,7 @@ class NextUpPreferences(context: Context) {
     var widgetAlignment: String
         get() = prefs.getString(KEY_WIDGET_ALIGNMENT, ALIGNMENT_LEFT) ?: ALIGNMENT_LEFT
         set(value) {
-            prefs.edit().putString(KEY_WIDGET_ALIGNMENT, value).apply()
+            prefs.edit().putString(KEY_WIDGET_ALIGNMENT, value).commit()
             _widgetAlignmentFlow.value = value
         }
 

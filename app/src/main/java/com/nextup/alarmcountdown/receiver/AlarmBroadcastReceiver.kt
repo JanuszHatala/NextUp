@@ -17,11 +17,21 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val ACTION_REFRESH_WIDGET = "com.nextup.alarmcountdown.ACTION_REFRESH_WIDGET"
         const val ACTION_REFRESH_NOTIFICATION = "com.nextup.alarmcountdown.ACTION_REFRESH_NOTIFICATION"
         const val ACTION_TOGGLE_WIDGET_ALIGNMENT = "com.nextup.alarmcountdown.ACTION_TOGGLE_WIDGET_ALIGNMENT"
+        private const val TOGGLE_DEBOUNCE_MILLIS = 400L
+
+        @Volatile
+        private var lastToggleTimeMillis = 0L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_TOGGLE_WIDGET_ALIGNMENT -> {
+                val now = System.currentTimeMillis()
+                if (now - lastToggleTimeMillis < TOGGLE_DEBOUNCE_MILLIS) {
+                    return
+                }
+                lastToggleTimeMillis = now
+
                 val prefs = com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context)
                 val current = prefs.widgetAlignment
                 val nextAlignment = if (current == com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER) {
