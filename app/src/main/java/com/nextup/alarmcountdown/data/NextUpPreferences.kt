@@ -58,6 +58,7 @@ class NextUpPreferences(context: Context) {
     var widgetAlignment: String
         get() = prefs.getString(KEY_WIDGET_ALIGNMENT, ALIGNMENT_LEFT) ?: ALIGNMENT_LEFT
         set(value) {
+            com.nextup.alarmcountdown.util.NextUpLog.i("Prefs", "widgetAlignment changed: old=${_widgetAlignmentFlow.value} -> new=$value")
             prefs.edit().putString(KEY_WIDGET_ALIGNMENT, value).commit()
             _widgetAlignmentFlow.value = value
         }
@@ -65,6 +66,8 @@ class NextUpPreferences(context: Context) {
     fun syncFromDisk() {
         _isNotificationEnabledFlow.value = prefs.getBoolean(KEY_PERMANENT_NOTIFICATION_ENABLED, false)
         _isStatusBarInfoEnabledFlow.value = prefs.getBoolean(KEY_STATUS_BAR_INFO_ENABLED, true)
-        _widgetAlignmentFlow.value = prefs.getString(KEY_WIDGET_ALIGNMENT, ALIGNMENT_LEFT) ?: ALIGNMENT_LEFT
+        val alignment = prefs.getString(KEY_WIDGET_ALIGNMENT, ALIGNMENT_LEFT) ?: ALIGNMENT_LEFT
+        _widgetAlignmentFlow.value = alignment
+        com.nextup.alarmcountdown.util.NextUpLog.d("Prefs", "syncFromDisk: widgetAlignment=$alignment")
     }
 }

@@ -12,12 +12,19 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.util.SizeF
+import android.view.View
 import android.widget.RemoteViews
 import com.nextup.alarmcountdown.MainActivity
 import com.nextup.alarmcountdown.R
+import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
+import com.nextup.alarmcountdown.data.model.AlarmPattern
 import com.nextup.alarmcountdown.data.AlarmRepository
+import com.nextup.alarmcountdown.data.NextUpPreferences
 import com.nextup.alarmcountdown.receiver.AlarmBroadcastReceiver
 import com.nextup.alarmcountdown.util.AlarmFormatter
+import com.nextup.alarmcountdown.util.NextUpLog
+import java.util.Calendar
+import kotlinx.coroutines.runBlocking
 
 class NextUpWidgetProvider : AppWidgetProvider() {
 
@@ -47,6 +54,10 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val appWidgetManager = AppWidgetManager.getInstance(appContext) ?: return
             val componentName = ComponentName(appContext, NextUpWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            NextUpLog.i(
+                "WidgetProvider",
+                "updateAllWidgets: found ${appWidgetIds?.size ?: 0} widgets: ${appWidgetIds?.contentToString()}"
+            )
             if (appWidgetIds != null && appWidgetIds.isNotEmpty()) {
                 for (widgetId in appWidgetIds) {
                     updateWidget(appContext, appWidgetManager, widgetId)
@@ -54,63 +65,59 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun buildViews(
+        private fun buildTinyViews(
             context: Context,
-            layoutId: Int,
             countdownText: String,
-            dateTimeText: String,
             clockPendingIntent: PendingIntent,
-            appPendingIntent: PendingIntent,
-            alignTogglePendingIntent: PendingIntent? = null,
-            alignIconRes: Int = 0
+            appPendingIntent: PendingIntent
         ): RemoteViews {
-            return RemoteViews(context.packageName, layoutId).apply {
+            return RemoteViews(context.packageName, R.layout.widget_next_up_tiny).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
-                try {
-                    setTextViewText(R.id.widget_alarm_time, dateTimeText)
-                } catch (ignored: Exception) {
-                }
-                // Tap root card / time -> Google Clock
                 setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
                 setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
-                try {
-                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
-                } catch (ignored: Exception) {
-                }
+                setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
+            }
+        }
 
-                // Tap top bar, header, or title -> NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
-                } catch (ignored: Exception) {
-                }
-                try {
-                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
-                } catch (ignored: Exception) {
-                }
-                try {
-                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
-                } catch (ignored: Exception) {
-                }
-                // In medium/compact layouts (where there is no header text), icon taps open NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
-                } catch (ignored: Exception) {
-                }
+        private fun buildCompactViews(
+            context: Context,
+            countdownText: String,
+            shortTargetDateTimeText: String,
+            clockPendingIntent: PendingIntent,
+            appPendingIntent: PendingIntent,
+            alignTogglePendingIntent: PendingIntent,
+            alignIconRes: Int,
+            isCentered: Boolean
+        ): RemoteViews {
+            return RemoteViews(context.packageName, R.layout.widget_next_up_compact_wide).apply {
+                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
+                setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
+                setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
 
-                // Alignment toggle button
-                if (alignTogglePendingIntent != null && alignIconRes != 0) {
-                    try {
-                        setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
-                        setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
-                    } catch (ignored: Exception) {
-                    }
+                setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
+                setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
+
+                if (isCentered) {
+                    setViewVisibility(R.id.widget_alarm_section_left, View.GONE)
+                    setViewVisibility(R.id.widget_alarm_section_center, View.VISIBLE)
+                    setTextViewText(R.id.widget_countdown_center, countdownText)
+                    setTextViewText(R.id.widget_alarm_time_center, shortTargetDateTimeText)
+                    setOnClickPendingIntent(R.id.widget_countdown_center, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_center, clockPendingIntent)
+                } else {
+                    setViewVisibility(R.id.widget_alarm_section_center, View.GONE)
+                    setViewVisibility(R.id.widget_alarm_section_left, View.VISIBLE)
+                    setTextViewText(R.id.widget_countdown_left, countdownText)
+                    setTextViewText(R.id.widget_alarm_time_left, shortTargetDateTimeText)
+                    setOnClickPendingIntent(R.id.widget_countdown_left, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_left, clockPendingIntent)
                 }
             }
         }
 
         private fun buildTallViews(
             context: Context,
-            layoutId: Int,
             appWidgetId: Int,
             countdownText: String,
             fullTargetDateTimeText: String,
@@ -118,55 +125,86 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             appPendingIntent: PendingIntent,
             alignTogglePendingIntent: PendingIntent,
             alignIconRes: Int,
-            isCentered: Boolean
+            isCentered: Boolean,
+            routinePatterns: List<AlarmPattern>,
+            fromTimeMillis: Long
         ): RemoteViews {
-            return RemoteViews(context.packageName, layoutId).apply {
-                setTextViewText(R.id.widget_countdown, countdownText)
-                setTextViewText(R.id.widget_alarm_time, fullTargetDateTimeText)
-
-                // Root card tap default -> Google Clock
+            return RemoteViews(context.packageName, R.layout.widget_next_up_tall).apply {
                 setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
+                setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
+                setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
 
-                // Top header / title tap -> NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_top_bar, appPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
-                } catch (ignored: Exception) {}
+                setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
+                setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
 
-                // Alignment toggle button
-                try {
-                    setImageViewResource(R.id.widget_btn_align_toggle, alignIconRes)
-                    setOnClickPendingIntent(R.id.widget_btn_align_toggle, alignTogglePendingIntent)
-                } catch (ignored: Exception) {}
+                if (isCentered) {
+                    setViewVisibility(R.id.widget_alarm_section_left, View.GONE)
+                    setViewVisibility(R.id.widget_alarm_section_center, View.VISIBLE)
+                    setTextViewText(R.id.widget_countdown_center, countdownText)
+                    setTextViewText(R.id.widget_alarm_time_center, fullTargetDateTimeText)
+                    setOnClickPendingIntent(R.id.widget_countdown_center, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_center, clockPendingIntent)
 
-                // Alarm countdown and target time tap -> Google Clock
-                try {
-                    setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_alarm_time, clockPendingIntent)
-                } catch (ignored: Exception) {}
-                try {
-                    setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
-                } catch (ignored: Exception) {}
+                    setViewVisibility(R.id.widget_section_predicted_left, View.GONE)
+                    setViewVisibility(R.id.widget_section_predicted_center, View.VISIBLE)
+                    setOnClickPendingIntent(R.id.widget_section_predicted_center, appPendingIntent)
 
-                // Routine subheader tap -> NextUp App
-                try {
-                    setOnClickPendingIntent(R.id.widget_section_predicted, appPendingIntent)
-                } catch (ignored: Exception) {}
+                    setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty_center)
+                } else {
+                    setViewVisibility(R.id.widget_alarm_section_center, View.GONE)
+                    setViewVisibility(R.id.widget_alarm_section_left, View.VISIBLE)
+                    setTextViewText(R.id.widget_countdown_left, countdownText)
+                    setTextViewText(R.id.widget_alarm_time_left, fullTargetDateTimeText)
+                    setOnClickPendingIntent(R.id.widget_countdown_left, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_left, clockPendingIntent)
 
-                // Bind RemoteViewsService collection adapter for smooth touch-scrolling
-                val serviceIntent = Intent(context, NextUpWidgetService::class.java).apply {
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    data = Uri.parse("content://com.nextup.alarmcountdown.widget/$appWidgetId?align=$isCentered")
+                    setViewVisibility(R.id.widget_section_predicted_center, View.GONE)
+                    setViewVisibility(R.id.widget_section_predicted_left, View.VISIBLE)
+                    setOnClickPendingIntent(R.id.widget_section_predicted_left, appPendingIntent)
+
+                    setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty_left)
                 }
-                setRemoteAdapter(R.id.widget_alarms_list, serviceIntent)
-                setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty)
+
+                // Populate routine list items
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val builder = RemoteViews.RemoteCollectionItems.Builder()
+                    val now = System.currentTimeMillis()
+                    for (pattern in routinePatterns) {
+                        val occurrenceTime = pattern.getNextOccurrenceMillis(fromTimeMillis)
+                        val text = AlarmFormatter.formatRoutineLine(
+                            pattern.dayNameShort,
+                            pattern.timeFormatted,
+                            occurrenceTime,
+                            now
+                        )
+                        val rowView = RemoteViews(context.packageName, R.layout.widget_item_routine).apply {
+                            if (isCentered) {
+                                setViewVisibility(R.id.widget_item_routine_text_left, View.GONE)
+                                setViewVisibility(R.id.widget_item_routine_text_center, View.VISIBLE)
+                                setTextViewText(R.id.widget_item_routine_text_center, text)
+                                setOnClickFillInIntent(R.id.widget_item_root, Intent())
+                                setOnClickFillInIntent(R.id.widget_item_routine_text_center, Intent())
+                            } else {
+                                setViewVisibility(R.id.widget_item_routine_text_center, View.GONE)
+                                setViewVisibility(R.id.widget_item_routine_text_left, View.VISIBLE)
+                                setTextViewText(R.id.widget_item_routine_text_left, text)
+                                setOnClickFillInIntent(R.id.widget_item_root, Intent())
+                                setOnClickFillInIntent(R.id.widget_item_routine_text_left, Intent())
+                            }
+                        }
+                        builder.addItem(pattern.patternId.hashCode().toLong(), rowView)
+                    }
+                    builder.setHasStableIds(true)
+                    builder.setViewTypeCount(1)
+                    setRemoteAdapter(R.id.widget_alarms_list, builder.build())
+                } else {
+                    val serviceIntent = Intent(context, NextUpWidgetService::class.java).apply {
+                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        data = Uri.parse("content://com.nextup.alarmcountdown.widget/$appWidgetId")
+                    }
+                    setRemoteAdapter(R.id.widget_alarms_list, serviceIntent)
+                }
                 setPendingIntentTemplate(R.id.widget_alarms_list, clockPendingIntent)
             }
         }
@@ -185,14 +223,16 @@ class NextUpWidgetProvider : AppWidgetProvider() {
 
             // Main clock tap -> Google Clock
             val clockPendingIntent = run {
-                val launchIntent = context.packageManager.getLaunchIntentForPackage("com.google.android.deskclock")
-                    ?: Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val launchIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    setPackage("com.google.android.deskclock")
+                }
+                if (context.packageManager.resolveActivity(launchIntent, 0) == null) {
+                    launchIntent.setPackage(null)
+                }
                 PendingIntent.getActivity(
                     context,
-                    0,
+                    2001,
                     launchIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -209,75 +249,65 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val prefs = com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context)
-            val isCentered = prefs.widgetAlignment == com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER
-
-            val compactWideLayout = if (isCentered) R.layout.widget_next_up_compact_wide_center else R.layout.widget_next_up_compact_wide
-            val mediumLayout = if (isCentered) R.layout.widget_next_up_medium_center else R.layout.widget_next_up_medium
-            val largeLayout = if (isCentered) R.layout.widget_next_up_center else R.layout.widget_next_up
-            val tallLayout = if (isCentered) R.layout.widget_next_up_tall_center else R.layout.widget_next_up_tall
+            val prefs = NextUpPreferences.getInstance(context)
+            prefs.syncFromDisk()
+            val isCentered = prefs.widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
             val toggleAlignIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 action = AlarmBroadcastReceiver.ACTION_TOGGLE_WIDGET_ALIGNMENT
+                data = Uri.parse("nextup://widget/align_toggle/$appWidgetId")
             }
             val alignTogglePendingIntent = PendingIntent.getBroadcast(
                 context,
-                1002,
+                10000 + appWidgetId,
                 toggleAlignIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val alignIconRes = if (isCentered) R.drawable.ic_format_align_center else R.drawable.ic_format_align_left
 
-            // 1. Tiny (1x1 or smallest shrinked): icon + countdown only
-            val tinyViews = buildViews(
+            // 1. Tiny (1x1): icon + countdown only
+            val tinyViews = buildTinyViews(
                 context,
-                R.layout.widget_next_up_tiny,
                 countdownText,
-                "",
                 clockPendingIntent,
                 appPendingIntent
             )
 
-            // 2. Compact wide (2x1): icon + countdown + concise shortcut day/time + alignment toggle
-            val compactWideViews = buildViews(
+            // 2. Compact (2x1, 3x1, 4x1): icon + countdown + concise day/time + alignment toggle
+            val compactViews = buildCompactViews(
                 context,
-                compactWideLayout,
                 countdownText,
                 shortTargetDateTimeText,
                 clockPendingIntent,
                 appPendingIntent,
                 alignTogglePendingIntent,
-                alignIconRes
+                alignIconRes,
+                isCentered
             )
 
-            // 3. Medium wide (3x1, 4x1): icon + countdown + concise day/time + alignment toggle
-            val mediumViews = buildViews(
-                context,
-                mediumLayout,
-                countdownText,
-                shortTargetDateTimeText,
-                clockPendingIntent,
-                appPendingIntent,
-                alignTogglePendingIntent,
-                alignIconRes
-            )
+            val dbManager = AlarmDatabaseManager(context)
+            val allPatterns = runBlocking {
+                dbManager.getAllPatterns().filter { it.isActive }
+            }
+            val now = System.currentTimeMillis()
+            val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
+            val fromTimeMillis = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
+            val filteredPatterns = if (hasActiveAlarm) {
+                val cal = Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
+                val cPatternId = AlarmPattern.buildPatternId(
+                    cal.get(Calendar.DAY_OF_WEEK),
+                    cal.get(Calendar.HOUR_OF_DAY),
+                    cal.get(Calendar.MINUTE)
+                )
+                allPatterns.filter { it.patternId != cPatternId }
+            } else {
+                allPatterns
+            }
+            val sortedPatterns = filteredPatterns.sortedBy { it.getNextOccurrenceMillis(fromTimeMillis) }
 
-            // 4. Large (2x2, 3x2, etc.): full header, large countdown, full day/time + alignment toggle
-            val largeViews = buildViews(
-                context,
-                largeLayout,
-                countdownText,
-                fullTargetDateTimeText,
-                clockPendingIntent,
-                appPendingIntent,
-                alignTogglePendingIntent,
-                alignIconRes
-            )
-
-            // 5. Tall / Expanded: Dynamically driven by ListView collection widget (scrollable, no scrollbars)
+            // 3. Tall / Expanded (2x2 and taller): full header, countdown, subheader + scrollable collection
             val tallViews = buildTallViews(
                 context = context,
-                layoutId = tallLayout,
                 appWidgetId = appWidgetId,
                 countdownText = countdownText,
                 fullTargetDateTimeText = fullTargetDateTimeText,
@@ -285,36 +315,47 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 appPendingIntent = appPendingIntent,
                 alignTogglePendingIntent = alignTogglePendingIntent,
                 alignIconRes = alignIconRes,
-                isCentered = isCentered
+                isCentered = isCentered,
+                routinePatterns = sortedPatterns,
+                fromTimeMillis = fromTimeMillis
             )
 
-            val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Responsive layout: maps standard form-factor archetypes.
-                // tallViews with its scrollable ListView automatically handles ANY height >= 150dp!
-                RemoteViews(
-                    mapOf(
-                        SizeF(40f, 40f) to tinyViews,
-                        SizeF(100f, 40f) to compactWideViews,
-                        SizeF(180f, 40f) to mediumViews,
-                        SizeF(100f, 100f) to largeViews,
-                        SizeF(100f, 150f) to tallViews
-                    )
-                )
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val isPortrait = context.resources.configuration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val height = if (isPortrait) {
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
             } else {
-                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
-                when {
-                    minHeight >= 150 -> tallViews
-                    minHeight >= 100 -> largeViews
-                    minWidth >= 180 -> mediumViews
-                    minWidth >= 100 -> compactWideViews
-                    else -> tinyViews
-                }
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            }.let { if (it > 0) it else options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) }
+
+            val width = if (isPortrait) {
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            } else {
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+            }.let { if (it > 0) it else options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) }
+
+            val views = when {
+                height >= 150 -> tallViews
+                width >= 100 -> compactViews
+                else -> tinyViews
             }
 
+            val layoutName = when {
+                views == tallViews -> "tall"
+                views == compactViews -> "compact"
+                else -> "tiny"
+            }
+
+            NextUpLog.i(
+                "WidgetProvider",
+                "updateWidget(id=$appWidgetId): layout=$layoutName, width=$width, height=$height, isCentered=$isCentered, countdown='$countdownText'"
+            )
+
             appWidgetManager.updateAppWidget(appWidgetId, views)
-            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_alarms_list)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && views == tallViews) {
+                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_alarms_list)
+            }
+            NextUpLog.d("WidgetProvider", "updateWidget(id=$appWidgetId): updateAppWidget dispatched ($layoutName)")
 
             // Auto-refresh exactly when the alarm is due to ring
             val triggerTime = nextAlarm?.triggerTimeMillis

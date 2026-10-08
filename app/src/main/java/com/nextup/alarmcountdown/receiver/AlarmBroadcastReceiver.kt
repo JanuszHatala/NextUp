@@ -17,28 +17,36 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val ACTION_REFRESH_WIDGET = "com.nextup.alarmcountdown.ACTION_REFRESH_WIDGET"
         const val ACTION_REFRESH_NOTIFICATION = "com.nextup.alarmcountdown.ACTION_REFRESH_NOTIFICATION"
         const val ACTION_TOGGLE_WIDGET_ALIGNMENT = "com.nextup.alarmcountdown.ACTION_TOGGLE_WIDGET_ALIGNMENT"
-        private const val TOGGLE_DEBOUNCE_MILLIS = 400L
+        const val EXTRA_TARGET_ALIGNMENT = "com.nextup.alarmcountdown.extra.TARGET_ALIGNMENT"
+        private const val TOGGLE_DEBOUNCE_MILLIS = 250L
 
         @Volatile
         private var lastToggleTimeMillis = 0L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        com.nextup.alarmcountdown.util.NextUpLog.i(
+            "Receiver",
+            "onReceive: action=${intent.action}, data=${intent.data}"
+        )
         when (intent.action) {
             ACTION_TOGGLE_WIDGET_ALIGNMENT -> {
                 val now = System.currentTimeMillis()
                 if (now - lastToggleTimeMillis < TOGGLE_DEBOUNCE_MILLIS) {
+                    com.nextup.alarmcountdown.util.NextUpLog.w("Receiver", "Debouncing toggle within ${now - lastToggleTimeMillis}ms")
                     return
                 }
                 lastToggleTimeMillis = now
 
                 val prefs = com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context)
+                prefs.syncFromDisk()
                 val current = prefs.widgetAlignment
                 val nextAlignment = if (current == com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER) {
                     com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_LEFT
                 } else {
                     com.nextup.alarmcountdown.data.NextUpPreferences.ALIGNMENT_CENTER
                 }
+                com.nextup.alarmcountdown.util.NextUpLog.i("Receiver", "Toggling widgetAlignment: $current -> $nextAlignment")
                 prefs.widgetAlignment = nextAlignment
                 NextUpWidgetProvider.updateAllWidgets(context)
             }

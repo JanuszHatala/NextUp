@@ -99,9 +99,9 @@ object AlarmFormatter {
 
     /**
      * Formats a routine alarm row as a combined text line:
-     * e.g. "Thu 05:00 • in 6d 17h EST"
-     * Ensures the alarm time has precedence on the left and never gets pushed off
-     * by an isolated badge, with concise countdown calculation.
+     * e.g. "Thu 05:00 • in 6d 17h"
+     * Ensures the alarm time has precedence on the left and never gets pushed off,
+     * with concise countdown calculation.
      */
     fun formatRoutineLine(
         dayNameShort: String,
@@ -112,9 +112,9 @@ object AlarmFormatter {
         val remainingMillis = occurrenceMillis - nowMillis
         val countdown = formatRemainingConcise(occurrenceMillis, nowMillis)
         return if (remainingMillis <= 0L || countdown == NO_ALARM_TEXT) {
-            "$dayNameShort $timeFormatted EST"
+            "$dayNameShort $timeFormatted"
         } else {
-            "$dayNameShort $timeFormatted • in $countdown EST"
+            "$dayNameShort $timeFormatted • in $countdown"
         }
     }
 
