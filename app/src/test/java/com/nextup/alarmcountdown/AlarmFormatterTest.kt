@@ -70,4 +70,43 @@ class AlarmFormatterTest {
         val shortFormat = AlarmFormatter.formatShortTargetDateTime(now + 3600_000L)
         assert(shortFormat.isNotEmpty())
     }
+
+    @Test
+    fun testFormatRemainingConcise() {
+        assertEquals("No alarm set", AlarmFormatter.formatRemainingConcise(null, baseNow))
+        assertEquals("No alarm set", AlarmFormatter.formatRemainingConcise(0L, baseNow))
+        assertEquals("< 1m", AlarmFormatter.formatRemainingConcise(baseNow + 30_000L, baseNow))
+
+        // Minutes only
+        assertEquals("45m", AlarmFormatter.formatRemainingConcise(baseNow + 45 * 60_000L, baseNow))
+
+        // Hours only
+        assertEquals("3h", AlarmFormatter.formatRemainingConcise(baseNow + 3 * 60 * 60_000L, baseNow))
+
+        // Hours and minutes
+        assertEquals("9h 42m", AlarmFormatter.formatRemainingConcise(baseNow + (9 * 60 + 42) * 60_000L, baseNow))
+
+        // Days and hours: minutes MUST be omitted to conserve horizontal space in widgets
+        val sixDaysSeventeenHoursTwentyFourMins = (6 * 24 * 60 + 17 * 60 + 24) * 60_000L
+        assertEquals("6d 17h", AlarmFormatter.formatRemainingConcise(baseNow + sixDaysSeventeenHoursTwentyFourMins, baseNow))
+
+        // Days only (hours is 0)
+        val threeDaysZeroHoursTwentyMins = (3 * 24 * 60 + 20) * 60_000L
+        assertEquals("3d", AlarmFormatter.formatRemainingConcise(baseNow + threeDaysZeroHoursTwentyMins, baseNow))
+    }
+
+    @Test
+    fun testFormatRoutineLine() {
+        val sixDaysSeventeenHours = (6 * 24 * 60 + 17 * 60 + 24) * 60_000L
+        val formatted = AlarmFormatter.formatRoutineLine("Thu", "05:00", baseNow + sixDaysSeventeenHours, baseNow)
+        assertEquals("Thu 05:00 • in 6d 17h EST", formatted)
+
+        val nineHoursFortyTwoMins = (9 * 60 + 42) * 60_000L
+        val formattedToday = AlarmFormatter.formatRoutineLine("Fri", "05:00", baseNow + nineHoursFortyTwoMins, baseNow)
+        assertEquals("Fri 05:00 • in 9h 42m EST", formattedToday)
+
+        val pastTrigger = baseNow - 120_000L
+        val formattedPast = AlarmFormatter.formatRoutineLine("Sat", "08:00", pastTrigger, baseNow)
+        assertEquals("Sat 08:00 EST", formattedPast)
+    }
 }

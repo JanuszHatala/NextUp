@@ -115,16 +115,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             R.id.widget_predicted_row_7,
             R.id.widget_predicted_row_8
         )
-        private val PREDICTED_TEXT_IDS = intArrayOf(
-            R.id.widget_predicted_1_text,
-            R.id.widget_predicted_2_text,
-            R.id.widget_predicted_3_text,
-            R.id.widget_predicted_4_text,
-            R.id.widget_predicted_5_text,
-            R.id.widget_predicted_6_text,
-            R.id.widget_predicted_7_text,
-            R.id.widget_predicted_8_text
-        )
 
         private fun buildTallViews(
             context: Context,
@@ -201,10 +191,14 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                         if (i < showCount) {
                             val pattern = activePatterns[i]
                             val occurrenceTime = pattern.getNextOccurrenceMillis(fromTime)
-                            val countdown = AlarmFormatter.formatRemaining(occurrenceTime, now)
-                            val text = "${pattern.dayNameShort} ${pattern.timeFormatted} • in $countdown"
+                            val text = AlarmFormatter.formatRoutineLine(
+                                pattern.dayNameShort,
+                                pattern.timeFormatted,
+                                occurrenceTime,
+                                now
+                            )
                             setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.VISIBLE)
-                            setTextViewText(PREDICTED_TEXT_IDS[i], text)
+                            setTextViewText(PREDICTED_ROW_IDS[i], text)
                             setOnClickPendingIntent(PREDICTED_ROW_IDS[i], clockPendingIntent)
                         } else {
                             setViewVisibility(PREDICTED_ROW_IDS[i], android.view.View.GONE)
@@ -351,7 +345,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 filtered.sortedBy { it.getNextOccurrenceMillis(fromTime) }
             }
 
-            // 5. Tall / Expanded: Dynamically generated with 2, 3, 4, 6, or 8 items based on widget height
+            // 5. Tall / Expanded: Dynamically generated with 2..8 items based on widget height
             val tallViews2 = buildTallViews(
                 context = context,
                 layoutId = tallLayout,
@@ -391,10 +385,36 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 activePatterns = activePatterns,
                 nextAlarm = nextAlarm
             )
+            val tallViews5 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 5,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
             val tallViews6 = buildTallViews(
                 context = context,
                 layoutId = tallLayout,
                 maxItems = 6,
+                countdownText = countdownText,
+                fullTargetDateTimeText = fullTargetDateTimeText,
+                clockPendingIntent = clockPendingIntent,
+                appPendingIntent = appPendingIntent,
+                alignTogglePendingIntent = alignTogglePendingIntent,
+                alignIconRes = alignIconRes,
+                activePatterns = activePatterns,
+                nextAlarm = nextAlarm
+            )
+            val tallViews7 = buildTallViews(
+                context = context,
+                layoutId = tallLayout,
+                maxItems = 7,
                 countdownText = countdownText,
                 fullTargetDateTimeText = fullTargetDateTimeText,
                 clockPendingIntent = clockPendingIntent,
@@ -426,11 +446,13 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                         SizeF(100f, 40f) to compactWideViews,
                         SizeF(180f, 40f) to mediumViews,
                         SizeF(100f, 100f) to largeViews,
-                        SizeF(100f, 180f) to tallViews2,
-                        SizeF(100f, 220f) to tallViews3,
-                        SizeF(100f, 260f) to tallViews4,
-                        SizeF(100f, 310f) to tallViews6,
-                        SizeF(100f, 360f) to tallViews8
+                        SizeF(100f, 150f) to tallViews2,
+                        SizeF(100f, 170f) to tallViews3,
+                        SizeF(100f, 190f) to tallViews4,
+                        SizeF(100f, 210f) to tallViews5,
+                        SizeF(100f, 230f) to tallViews6,
+                        SizeF(100f, 250f) to tallViews7,
+                        SizeF(100f, 265f) to tallViews8
                     )
                 )
             } else {
@@ -438,11 +460,13 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
                 val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
                 when {
-                    minHeight >= 360 -> tallViews8
-                    minHeight >= 310 -> tallViews6
-                    minHeight >= 260 -> tallViews4
-                    minHeight >= 220 -> tallViews3
-                    minHeight >= 180 -> tallViews2
+                    minHeight >= 265 -> tallViews8
+                    minHeight >= 250 -> tallViews7
+                    minHeight >= 230 -> tallViews6
+                    minHeight >= 210 -> tallViews5
+                    minHeight >= 190 -> tallViews4
+                    minHeight >= 170 -> tallViews3
+                    minHeight >= 150 -> tallViews2
                     minHeight >= 100 -> largeViews
                     minWidth >= 180 -> mediumViews
                     minWidth >= 100 -> compactWideViews
