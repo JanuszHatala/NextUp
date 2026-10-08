@@ -10,3 +10,4 @@ build/
 .externalNativeBuild
 .cxx
 local.properties
+telemetry_dump/
