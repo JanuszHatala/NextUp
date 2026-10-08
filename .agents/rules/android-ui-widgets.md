@@ -26,3 +26,14 @@
 - **Prevent Duplicate Alarms**:
   - Before invoking `AlarmClock.ACTION_SET_ALARM`, always verify if the target time matches `AlarmManager.getNextAlarmClock()`.
   - If already active, reflect this in the UI (e.g. "Active ✓") and navigate to the existing alarm rather than dispatching a duplicate create intent.
+
+## 4. AppWidget Collections & Dynamic Sizing
+- **Use Collection Widgets (`ListView` + `RemoteViewsService`) for Variable Lists**:
+  - Never simulate dynamic lists by generating multiple permutations of static layouts with hardcoded row counts (`tallViews2`, `tallViews3`, etc.) and fixed height breakpoints.
+  - Variable lists in AppWidgets must use `<ListView android:scrollbars="none" .../>` backed by a `RemoteViewsService` and `RemoteViewsFactory`.
+  - The `ListView` dynamically expands (`layout_height="0dp"`, `layout_weight="1"`) to fill whatever vertical space is available on any device form factor (small phone, foldable, tablet) and allows smooth touch scrolling with hidden scrollbars.
+  - Set `setPendingIntentTemplate` on the `ListView` and `setOnClickFillInIntent` on item views to route clicks cleanly.
+- **Dynamic Sizing over Hardcoded Guesswork**:
+  - Do not hardcode height/width guesses for text rows or widget sizes.
+  - Rely on Android's native view measurement (`wrap_content`, `0dp` with weights), responsive archetypes (`RemoteViews(Map<SizeF, RemoteViews>)` with standard form factors), and `AppWidgetManager.getAppWidgetOptions()` for dimension inspection.
+
