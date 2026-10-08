@@ -79,4 +79,57 @@ class AlarmPatternTest {
         assertEquals("06:30", stats.earliestWakeFormatted)
         assertEquals("08:00", stats.latestWakeFormatted)
     }
+
+    @Test
+    fun testChronologicalRoutineSortingStartingFromActiveAlarm() {
+        val baseCal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.WEDNESDAY)
+            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val activeAlarmTime = baseCal.timeInMillis
+
+        val patWedMorning = AlarmPattern(
+            patternId = AlarmPattern.buildPatternId(Calendar.WEDNESDAY, 8, 30),
+            hour = 8,
+            minute = 30,
+            dayOfWeek = Calendar.WEDNESDAY
+        )
+        val patWedCurrent = AlarmPattern(
+            patternId = AlarmPattern.buildPatternId(Calendar.WEDNESDAY, 20, 45),
+            hour = 20,
+            minute = 45,
+            dayOfWeek = Calendar.WEDNESDAY
+        )
+        val patThuEarly = AlarmPattern(
+            patternId = AlarmPattern.buildPatternId(Calendar.THURSDAY, 5, 0),
+            hour = 5,
+            minute = 0,
+            dayOfWeek = Calendar.THURSDAY
+        )
+        val patThuLate = AlarmPattern(
+            patternId = AlarmPattern.buildPatternId(Calendar.THURSDAY, 5, 30),
+            hour = 5,
+            minute = 30,
+            dayOfWeek = Calendar.THURSDAY
+        )
+
+        val patterns = listOf(patWedMorning, patWedCurrent, patThuEarly, patThuLate)
+
+        // Filter out current active alarm pattern
+        val filtered = patterns.filter { it.patternId != patWedCurrent.patternId }
+
+        // Sort chronologically starting from activeAlarmTime (20:45)
+        val sorted = filtered.sortedBy { it.getNextOccurrenceMillis(activeAlarmTime) }
+
+        assertEquals(3, sorted.size)
+        // 1st should be Thu 05:00
+        assertEquals(patThuEarly.patternId, sorted[0].patternId)
+        // 2nd should be Thu 05:30
+        assertEquals(patThuLate.patternId, sorted[1].patternId)
+        // 3rd should be Wed 08:30 (next week)
+        assertEquals(patWedMorning.patternId, sorted[2].patternId)
+    }
 }
