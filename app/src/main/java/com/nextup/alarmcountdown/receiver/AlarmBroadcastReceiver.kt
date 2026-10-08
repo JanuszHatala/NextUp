@@ -40,16 +40,22 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_USER_PRESENT,
-            Intent.ACTION_SCREEN_ON,
-            Intent.ACTION_TIME_TICK -> {
+            Intent.ACTION_SCREEN_ON -> {
+                val action = intent.action
+                val shouldUpdateLearning = action == AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED ||
+                        action == Intent.ACTION_BOOT_COMPLETED ||
+                        action == Intent.ACTION_MY_PACKAGE_REPLACED
+
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        val repo = AlarmRepository(context)
-                        val nextAlarm = repo.getNextAlarm()
-                        if (nextAlarm?.triggerTimeMillis != null) {
-                            val engine = AlarmLearningEngine(context)
-                            engine.onConfirmedAlarmObserved(nextAlarm.triggerTimeMillis)
+                        if (shouldUpdateLearning) {
+                            val repo = AlarmRepository(context)
+                            val nextAlarm = repo.getNextAlarm()
+                            if (nextAlarm?.triggerTimeMillis != null) {
+                                val engine = AlarmLearningEngine(context)
+                                engine.onConfirmedAlarmObserved(nextAlarm.triggerTimeMillis)
+                            }
                         }
                     } catch (ignored: Exception) {
                     } finally {

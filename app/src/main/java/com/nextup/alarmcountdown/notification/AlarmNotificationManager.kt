@@ -106,7 +106,7 @@ object AlarmNotificationManager {
         )
 
         val title = if (hasValidAlarm) {
-            "Next Alarm: in $countdownText"
+            "Next Alarm"
         } else {
             "No active alarm"
         }
@@ -129,16 +129,26 @@ object AlarmNotificationManager {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
 
+        if (hasValidAlarm && triggerTime != null) {
+            // Native chronometer countdown: Android SystemUI updates the live countdown
+            // on the display/GPU without waking the app CPU or draining battery!
+            builder.setWhen(triggerTime)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+        } else {
+            builder.setShowWhen(false)
+                .setUsesChronometer(false)
+        }
+
         // 3. Action: Dismiss Alarm (Direct Activity intent to Google Clock HandleApiCalls)
-        if (hasValidAlarm) {
+        if (hasValidAlarm && triggerTime != null) {
             val clockDismissIntent = Intent(AlarmClock.ACTION_DISMISS_ALARM).apply {
                 // Google Clock's internal parser expects "android.next"
                 putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, "android.next")
-                if (triggerTime != null) {
-                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerTime }
-                    putExtra(AlarmClock.EXTRA_HOUR, cal.get(java.util.Calendar.HOUR_OF_DAY))
-                    putExtra(AlarmClock.EXTRA_MINUTES, cal.get(java.util.Calendar.MINUTE))
-                }
+                val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerTime }
+                putExtra(AlarmClock.EXTRA_HOUR, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                putExtra(AlarmClock.EXTRA_MINUTES, cal.get(java.util.Calendar.MINUTE))
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -168,24 +178,17 @@ object AlarmNotificationManager {
         } catch (ignored: SecurityException) {
         }
 
-        // Schedule next update tick aligned with minute boundary or trigger time
-        scheduleNextUpdate(context, triggerTime)
+        // Schedule next update ONLY at the actual alarm ring time to transition state
+        // ZERO recurring 60-second waking alarms!
+        scheduleAlarmTransition(context, triggerTime)
     }
 
-    private fun scheduleNextUpdate(context: Context, triggerTimeMillis: Long?) {
+    /**
+     * Schedules an alarm strictly when the active alarm expires so the notification
+     * transitions to "No active alarm". Does NOT set periodic 60-second waking alarms.
+     */
+    private fun scheduleAlarmTransition(context: Context, triggerTimeMillis: Long?) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val now = System.currentTimeMillis()
-
-        // Calculate next minute mark
-        val nextMinute = (now / 60_000L + 1) * 60_000L
-
-        // Next wake up time is either next minute mark or alarm trigger time, whichever is earlier
-        val nextWakeTime = if (triggerTimeMillis != null && triggerTimeMillis > now && triggerTimeMillis < nextMinute) {
-            triggerTimeMillis
-        } else {
-            nextMinute
-        }
-
         val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
             action = AlarmBroadcastReceiver.ACTION_REFRESH_NOTIFICATION
         }
@@ -196,16 +199,26 @@ object AlarmNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC, nextWakeTime, pi)
-            } else {
-                am.set(AlarmManager.RTC, nextWakeTime, pi)
-            }
-        } catch (ignored: Exception) {
+        val now = System.currentTimeMillis()
+        if (triggerTimeMillis != null && triggerTimeMillis > now) {
+            // Buffer by 500ms so AlarmManager sees triggerTime passed when query executed
+            val targetTime = triggerTimeMillis + 500L
             try {
-                am.set(AlarmManager.RTC, nextWakeTime, pi)
-            } catch (ignored2: Exception) {}
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC, targetTime, pi)
+                } else {
+                    am.set(AlarmManager.RTC, targetTime, pi)
+                }
+            } catch (e: Exception) {
+                try {
+                    am.set(AlarmManager.RTC, targetTime, pi)
+                } catch (ignored: Exception) {}
+            }
+        } else {
+            // No future alarm: cancel any pending transition alarm
+            try {
+                am.cancel(pi)
+            } catch (ignored: Exception) {}
         }
     }
 }
