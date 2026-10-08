@@ -63,6 +63,62 @@ object AlarmFormatter {
     }
 
     /**
+     * Concise format for routine countdowns in widgets.
+     * When days > 0, omits minutes (e.g. "6d 17h" instead of "6d 17h 24m") to conserve horizontal space.
+     * When days == 0 and hours > 0: "9h 42m" (or "9h" if minutes == 0)
+     * When days == 0 and hours == 0: "42m"
+     * When under 1 minute: "< 1m"
+     */
+    fun formatRemainingConcise(triggerTimeMillis: Long?, nowMillis: Long = System.currentTimeMillis()): String {
+        if (triggerTimeMillis == null || triggerTimeMillis <= 0L) {
+            return NO_ALARM_TEXT
+        }
+
+        val remainingMillis = triggerTimeMillis - nowMillis
+        if (remainingMillis <= 0L) {
+            return if (remainingMillis >= -60_000L) LESS_THAN_ONE_MINUTE_TEXT else NO_ALARM_TEXT
+        }
+
+        val totalMinutes = remainingMillis / 60_000L
+        if (totalMinutes == 0L) {
+            return LESS_THAN_ONE_MINUTE_TEXT
+        }
+
+        val days = totalMinutes / (24 * 60)
+        val hours = (totalMinutes % (24 * 60)) / 60
+        val minutes = totalMinutes % 60
+
+        return when {
+            days > 0 && hours > 0 -> "${days}d ${hours}h"
+            days > 0 -> "${days}d"
+            hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+            hours > 0 -> "${hours}h"
+            else -> "${minutes}m"
+        }
+    }
+
+    /**
+     * Formats a routine alarm row as a combined text line:
+     * e.g. "Thu 05:00 • in 6d 17h EST"
+     * Ensures the alarm time has precedence on the left and never gets pushed off
+     * by an isolated badge, with concise countdown calculation.
+     */
+    fun formatRoutineLine(
+        dayNameShort: String,
+        timeFormatted: String,
+        occurrenceMillis: Long,
+        nowMillis: Long = System.currentTimeMillis()
+    ): String {
+        val remainingMillis = occurrenceMillis - nowMillis
+        val countdown = formatRemainingConcise(occurrenceMillis, nowMillis)
+        return if (remainingMillis <= 0L || countdown == NO_ALARM_TEXT) {
+            "$dayNameShort $timeFormatted EST"
+        } else {
+            "$dayNameShort $timeFormatted • in $countdown EST"
+        }
+    }
+
+    /**
      * Formats the scheduled alarm target timestamp into human-readable date and time.
      * e.g., "Today at 07:00", "Tomorrow at 07:00", or "Sun, Oct 4 at 07:00".
      */

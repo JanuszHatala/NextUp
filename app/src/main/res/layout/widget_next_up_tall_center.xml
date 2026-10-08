@@ -107,365 +107,154 @@
         android:layout_height="wrap_content"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
-        android:letterSpacing="0.05"
+        android:letterSpacing="0.02"
+        android:maxLines="1"
+        android:singleLine="true"
         android:text="UPCOMING ROUTINE"
         android:textColor="@color/widget_on_surface_variant"
         android:textSize="10sp" />
 
     <!-- Predicted Rows (Dynamically shown up to 8 based on widget height) -->
     <!-- Predicted Row 1 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <!-- Left invisible spacer balancing the EST badge to keep middle text centered -->
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_1_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 2 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_2_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 3 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_3_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 4 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_4"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_4_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 5 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_5"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_5_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 6 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_6"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_6_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 7 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_7"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_7_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Predicted Row 8 -->
-    <LinearLayout
+    <TextView
         android:id="@+id/widget_predicted_row_8"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="1dp"
-            android:contentDescription="@null"
-            android:visibility="invisible" />
-
-        <TextView
-            android:id="@+id/widget_predicted_8_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_est_badge"
-            android:fontFamily="sans-serif-bold"
-            android:gravity="center"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:text="EST"
-            android:textColor="@color/widget_chip_text"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/widget_on_surface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <!-- Additional Alarms Counter -->
     <TextView
         android:id="@+id/widget_predicted_more"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:singleLine="true"
         android:text=""
         android:textColor="@color/widget_primary"
         android:textSize="10sp"
