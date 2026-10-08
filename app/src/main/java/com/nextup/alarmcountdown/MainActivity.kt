@@ -142,8 +142,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         prefs.syncFromDisk()
-        NextUpWidgetProvider.updateAllWidgets(this)
-        com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(this)
+        NextUpWidgetProvider.updateAllWidgets(applicationContext)
+        com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(applicationContext)
     }
 
     private fun pinWidgetToHomeScreen() {
@@ -571,7 +571,7 @@ fun SettingsScreen(
                 widgetAlignment = widgetAlignment,
                 onSetAlignment = { alignment ->
                     prefs.widgetAlignment = alignment
-                    NextUpWidgetProvider.updateAllWidgets(context)
+                    NextUpWidgetProvider.updateAllWidgets(context.applicationContext)
                 },
                 isWidgetPinned = isWidgetPinned,
                 onPinWidget = {

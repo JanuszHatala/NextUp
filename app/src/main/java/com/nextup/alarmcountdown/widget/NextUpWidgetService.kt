@@ -33,6 +33,7 @@ class NextUpWidgetFactory(private val context: Context) : RemoteViewsService.Rem
 
     override fun onDataSetChanged() {
         val prefs = NextUpPreferences.getInstance(context)
+        prefs.syncFromDisk()
         isCentered = prefs.widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
         val nextAlarm = repository.getNextAlarm()
@@ -98,5 +99,5 @@ class NextUpWidgetFactory(private val context: Context) : RemoteViewsService.Rem
 
     override fun getItemId(position: Int): Long = position.toLong()
 
-    override fun hasStableIds(): Boolean = true
+    override fun hasStableIds(): Boolean = false
 }

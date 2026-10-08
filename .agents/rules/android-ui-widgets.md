@@ -37,3 +37,15 @@
   - Do not hardcode height/width guesses for text rows or widget sizes.
   - Rely on Android's native view measurement (`wrap_content`, `0dp` with weights), responsive archetypes (`RemoteViews(Map<SizeF, RemoteViews>)` with standard form factors), and `AppWidgetManager.getAppWidgetOptions()` for dimension inspection.
 
+## 5. AppWidget State Persistence & Collection Invalidation
+- **Synchronous Disk Persistence in Broadcast Receivers**:
+  - Always use `commit()` instead of `apply()` when persisting settings in `BroadcastReceiver` handlers (such as widget toggle buttons).
+  - Modern Android freezes cached app processes immediately after `onReceive()` returns; asynchronous `apply()` writes may be delayed or preempted, causing state reversion upon subsequent process wakeup or system broadcasts.
+- **Debounce Interactive Widget Buttons**:
+  - Interactive widget buttons wired to broadcast PendingIntents must be debounced (e.g., minimum 400ms threshold) to ignore accidental rapid double-taps or bounced touch events that toggle state back and forth.
+- **Invalidate RemoteViewsFactory Cache on Layout/Alignment Changes**:
+  - When collection item layouts change dynamically (e.g., alignment switch), set `hasStableIds() = false`.
+  - Embed the dynamic layout state in the `RemoteViewsService` `Intent.data` URI (e.g., `content://com.nextup.alarmcountdown.widget/$appWidgetId?align=$isCentered`) so Android's `RemoteViewsAdapter` recognizes the data-source change and purges stale cached layouts.
+- **Avoid Leaking Activity Contexts**:
+  - Always use `context.applicationContext` when invoking `AppWidgetManager.getInstance(context)` or updating widgets from Compose / Activities to avoid leaking Activity service connections (`ServiceConnectionLeaked`).
+
