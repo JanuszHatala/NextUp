@@ -124,9 +124,10 @@
         android:visibility="gone">
 
         <!-- Left invisible spacer balancing the EST badge to keep middle text centered -->
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -166,9 +167,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -208,9 +210,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -250,9 +253,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -292,9 +296,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -334,9 +339,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -376,9 +382,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
@@ -418,9 +425,10 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:layout_width="28dp"
             android:layout_height="1dp"
+            android:contentDescription="@null"
             android:visibility="invisible" />
 
         <TextView
