@@ -15,6 +15,15 @@ class NextUpDatabaseHelper(context: Context) : SQLiteOpenHelper(
         const val DATABASE_NAME = "nextup_alarms.db"
         const val DATABASE_VERSION = 1
 
+        @Volatile
+        private var instance: NextUpDatabaseHelper? = null
+
+        fun getInstance(context: Context): NextUpDatabaseHelper {
+            return instance ?: synchronized(this) {
+                instance ?: NextUpDatabaseHelper(context.applicationContext).also { instance = it }
+            }
+        }
+
         // Table 1: Raw alarm events
         const val TABLE_ALARM_EVENTS = "alarm_events"
         const val COL_EVENT_ID = "id"

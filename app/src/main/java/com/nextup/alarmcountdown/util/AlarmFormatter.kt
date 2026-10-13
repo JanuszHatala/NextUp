@@ -109,12 +109,43 @@ object AlarmFormatter {
         occurrenceMillis: Long,
         nowMillis: Long = System.currentTimeMillis()
     ): String {
+        return formatGroupedRoutineLine(dayNameShort, timeFormatted, occurrenceMillis, nowMillis)
+    }
+
+    /**
+     * Formats the first hero line of a routine alarm:
+     * e.g. "05:00 • in 7h 46m"
+     */
+    fun formatRoutineTimeAndCountdown(
+        timeFormatted: String,
+        occurrenceMillis: Long,
+        nowMillis: Long = System.currentTimeMillis()
+    ): String {
         val remainingMillis = occurrenceMillis - nowMillis
         val countdown = formatRemainingConcise(occurrenceMillis, nowMillis)
         return if (remainingMillis <= 0L || countdown == NO_ALARM_TEXT) {
-            "$dayNameShort $timeFormatted"
+            timeFormatted
         } else {
-            "$dayNameShort $timeFormatted • in $countdown"
+            "$timeFormatted • in $countdown"
+        }
+    }
+
+    /**
+     * Formats a multi-day or single-day grouped routine alarm row as a combined text line:
+     * e.g. "Thu, Fri 05:00 • in 5d 22h" or "Weekdays 05:00 • in 22h"
+     */
+    fun formatGroupedRoutineLine(
+        daysLabel: String,
+        timeFormatted: String,
+        occurrenceMillis: Long,
+        nowMillis: Long = System.currentTimeMillis()
+    ): String {
+        val remainingMillis = occurrenceMillis - nowMillis
+        val countdown = formatRemainingConcise(occurrenceMillis, nowMillis)
+        return if (remainingMillis <= 0L || countdown == NO_ALARM_TEXT) {
+            "$daysLabel $timeFormatted"
+        } else {
+            "$daysLabel $timeFormatted • in $countdown"
         }
     }
 

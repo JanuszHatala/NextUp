@@ -77,17 +77,22 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.pm.PackageInfoCompat
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
 import com.nextup.alarmcountdown.data.AlarmModel
 import com.nextup.alarmcountdown.data.AlarmRepository
 import com.nextup.alarmcountdown.data.NextUpPreferences
 import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
 import com.nextup.alarmcountdown.data.model.AlarmPattern
+import com.nextup.alarmcountdown.data.model.GroupedAlarmPattern
 import com.nextup.alarmcountdown.notification.AlarmNotificationManager
 import com.nextup.alarmcountdown.ui.theme.NextUpTheme
 import com.nextup.alarmcountdown.util.AlarmFormatter
 import com.nextup.alarmcountdown.widget.NextUpWidgetProvider
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
+import java.util.Calendar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -122,15 +127,17 @@ class MainActivity : ComponentActivity() {
                         MainScreen(
                             repository = repository,
                             dbManager = dbManager,
+                            prefs = prefs,
                             onOpenClock = { openClockApp(repository.getNextAlarm()) },
                             onSetAlarm = { openSetAlarmScreen() },
-                            onSetPatternInClock = { pattern -> setPatternInClock(pattern) },
+                            onSetGroupedPatternInClock = { group -> setGroupedPatternInClock(group) },
                             onOpenSettings = { currentScreen = AppScreen.SETTINGS }
                         )
                     }
                     AppScreen.SETTINGS -> {
                         SettingsScreen(
                             prefs = prefs,
+                            dbManager = dbManager,
                             onBackClick = { currentScreen = AppScreen.MAIN },
                             onPinWidget = { pinWidgetToHomeScreen() }
                         )
@@ -222,22 +229,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setPatternInClock(pattern: AlarmPattern) {
+    private fun setGroupedPatternInClock(group: GroupedAlarmPattern) {
         val current = repository.getNextAlarm()
-        if (isPatternMatchingNextAlarm(pattern, current)) {
+        if (isGroupMatchingNextAlarm(group, current)) {
             android.widget.Toast.makeText(
                 this,
-                "Alarm for ${pattern.timeFormatted} is already active in Clock",
+                "Alarm for ${group.timeFormatted} is already active in Clock",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
             openClockApp(current)
             return
         }
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-            putExtra(AlarmClock.EXTRA_HOUR, pattern.hour)
-            putExtra(AlarmClock.EXTRA_MINUTES, pattern.minute)
-            putExtra(AlarmClock.EXTRA_DAYS, arrayListOf(pattern.dayOfWeek))
+            putExtra(AlarmClock.EXTRA_HOUR, group.hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, group.minute)
+            if (group.activeDays.isNotEmpty()) {
+                putExtra(AlarmClock.EXTRA_DAYS, ArrayList(group.activeDays))
+            }
             putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            putExtra(AlarmClock.EXTRA_MESSAGE, "NextUp Alarm")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
@@ -246,6 +256,14 @@ class MainActivity : ComponentActivity() {
             openClockApp(null)
         }
     }
+}
+
+fun isGroupMatchingNextAlarm(group: GroupedAlarmPattern, nextAlarm: AlarmModel?): Boolean {
+    if (nextAlarm == null || nextAlarm.triggerTimeMillis <= 0L) return false
+    val cal = Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
+    return group.hour == cal.get(Calendar.HOUR_OF_DAY) &&
+           group.minute == cal.get(Calendar.MINUTE) &&
+           (cal.get(Calendar.DAY_OF_WEEK) in group.activeDays)
 }
 
 fun isPatternMatchingNextAlarm(pattern: AlarmPattern, nextAlarm: AlarmModel?): Boolean {
@@ -268,14 +286,17 @@ fun isWidgetAdded(context: Context): Boolean {
 fun MainScreen(
     repository: AlarmRepository,
     dbManager: AlarmDatabaseManager,
+    prefs: NextUpPreferences,
     onOpenClock: () -> Unit,
     onSetAlarm: () -> Unit,
-    onSetPatternInClock: (AlarmPattern) -> Unit,
+    onSetGroupedPatternInClock: (GroupedAlarmPattern) -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val nextAlarm by repository.observeNextAlarm().collectAsStateWithLifecycle(initialValue = repository.getNextAlarm())
+    val isLearningPeriod by prefs.isLearningPeriodFlow.collectAsStateWithLifecycle()
+    val learningDayNumber by prefs.learningDayNumberFlow.collectAsStateWithLifecycle()
 
     var learnedPatterns by remember { mutableStateOf<List<AlarmPattern>>(emptyList()) }
 
@@ -392,22 +413,44 @@ fun MainScreen(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    if (isLearningPeriod) {
+                        LearningPeriodBanner(
+                            dayNumber = learningDayNumber,
+                            onStopLearning = {
+                                prefs.stopLearningPeriod()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Learning stopped. Current routine saved as reference.",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
                     WeeklyScheduleSection(
                         learnedPatterns = learnedPatterns,
                         nowMillis = nowMillis,
                         nextAlarm = nextAlarm,
                         onOpenClock = onOpenClock,
-                        onSetPatternInClock = onSetPatternInClock,
-                        onToggleActive = { pattern, active ->
+                        onSetGroupedPatternInClock = onSetGroupedPatternInClock,
+                        onToggleDay = { hour, minute, dayOfWeek, active ->
                             coroutineScope.launch {
-                                dbManager.togglePatternActive(pattern.patternId, active)
+                                dbManager.upsertPattern(dayOfWeek, hour, minute, active)
                                 refreshPatterns()
                                 NextUpWidgetProvider.updateAllWidgets(context)
                             }
                         },
-                        onDeletePattern = { pattern ->
+                        onToggleAll = { hour, minute, active ->
                             coroutineScope.launch {
-                                dbManager.deletePattern(pattern.patternId)
+                                dbManager.toggleAllPatternsForTime(hour, minute, active)
+                                refreshPatterns()
+                                NextUpWidgetProvider.updateAllWidgets(context)
+                            }
+                        },
+                        onDeleteGroup = { hour, minute ->
+                            coroutineScope.launch {
+                                dbManager.deleteAllPatternsForTime(hour, minute)
                                 refreshPatterns()
                                 NextUpWidgetProvider.updateAllWidgets(context)
                             }
@@ -440,6 +483,21 @@ fun MainScreen(
                     onSetAlarm = onSetAlarm
                 )
 
+                if (isLearningPeriod) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LearningPeriodBanner(
+                        dayNumber = learningDayNumber,
+                        onStopLearning = {
+                            prefs.stopLearningPeriod()
+                            android.widget.Toast.makeText(
+                                context,
+                                "Learning stopped. Current routine saved as reference.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 WeeklyScheduleSection(
@@ -447,17 +505,24 @@ fun MainScreen(
                     nowMillis = nowMillis,
                     nextAlarm = nextAlarm,
                     onOpenClock = onOpenClock,
-                    onSetPatternInClock = onSetPatternInClock,
-                    onToggleActive = { pattern, active ->
+                    onSetGroupedPatternInClock = onSetGroupedPatternInClock,
+                    onToggleDay = { hour, minute, dayOfWeek, active ->
                         coroutineScope.launch {
-                            dbManager.togglePatternActive(pattern.patternId, active)
+                            dbManager.upsertPattern(dayOfWeek, hour, minute, active)
                             refreshPatterns()
                             NextUpWidgetProvider.updateAllWidgets(context)
                         }
                     },
-                    onDeletePattern = { pattern ->
+                    onToggleAll = { hour, minute, active ->
                         coroutineScope.launch {
-                            dbManager.deletePattern(pattern.patternId)
+                            dbManager.toggleAllPatternsForTime(hour, minute, active)
+                            refreshPatterns()
+                            NextUpWidgetProvider.updateAllWidgets(context)
+                        }
+                    },
+                    onDeleteGroup = { hour, minute ->
+                        coroutineScope.launch {
+                            dbManager.deleteAllPatternsForTime(hour, minute)
                             refreshPatterns()
                             NextUpWidgetProvider.updateAllWidgets(context)
                         }
@@ -474,6 +539,7 @@ fun MainScreen(
 @Composable
 fun SettingsScreen(
     prefs: NextUpPreferences,
+    dbManager: AlarmDatabaseManager,
     onBackClick: () -> Unit,
     onPinWidget: () -> Unit
 ) {
@@ -580,6 +646,13 @@ fun SettingsScreen(
                     onPinWidget()
                     isWidgetPinned = isWidgetAdded(context)
                 }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            RoutineDataSettingsCard(
+                prefs = prefs,
+                dbManager = dbManager
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -705,13 +778,25 @@ fun WeeklyScheduleSection(
     nowMillis: Long,
     nextAlarm: AlarmModel?,
     onOpenClock: () -> Unit,
-    onSetPatternInClock: (AlarmPattern) -> Unit,
-    onToggleActive: (AlarmPattern, Boolean) -> Unit,
-    onDeletePattern: (AlarmPattern) -> Unit,
+    onSetGroupedPatternInClock: (GroupedAlarmPattern) -> Unit,
+    onToggleDay: (Int, Int, Int, Boolean) -> Unit,
+    onToggleAll: (Int, Int, Boolean) -> Unit,
+    onDeleteGroup: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var patternToDelete by remember { mutableStateOf<AlarmPattern?>(null) }
+    var groupToDelete by remember { mutableStateOf<GroupedAlarmPattern?>(null) }
+
+    val groupedPatterns = remember(learnedPatterns) {
+        GroupedAlarmPattern.fromPatterns(learnedPatterns)
+    }
+
+    val sortedGroups = remember(groupedPatterns, nowMillis, nextAlarm) {
+        groupedPatterns.sortedBy { group ->
+            group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis) ?: Long.MAX_VALUE
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -725,7 +810,7 @@ fun WeeklyScheduleSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "${learnedPatterns.count { it.isActive }} active",
+                text = "${groupedPatterns.count { it.isActive }} active",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
@@ -734,7 +819,7 @@ fun WeeklyScheduleSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        if (learnedPatterns.isEmpty()) {
+        if (groupedPatterns.isEmpty()) {
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -760,152 +845,174 @@ fun WeeklyScheduleSection(
                 }
             }
         } else {
-            learnedPatterns.forEach { pattern ->
-                val nextOccurrence = pattern.getNextOccurrenceMillis(nowMillis)
-                val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
-                val isAlreadyActive = isPatternMatchingNextAlarm(pattern, nextAlarm)
+            sortedGroups.forEach { group ->
+                val nextOccurrence = group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis)
+                val isAlreadyActive = isGroupMatchingNextAlarm(group, nextAlarm)
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    shape = RoundedCornerShape(16.dp),
+                        .padding(vertical = 5.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (pattern.isActive) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        containerColor = if (group.isActive) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Day Chip
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = pattern.dayNameShort.uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
+                        // Top row: Label + Time, and Actions (Set, Switch, Delete)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
-                                    text = pattern.timeFormatted,
+                                    text = group.timeFormatted,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                // Predicted Badge
-                                Box(
-                                    modifier = Modifier
-                                        .wrapContentWidth()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                val remainingText = if (group.isActive && nextOccurrence != null) {
+                                    val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
+                                    "Next: in $remaining"
+                                } else if (group.isActive) {
+                                    "No upcoming days"
+                                } else {
+                                    "One-off / Inactive"
+                                }
+
+                                Text(
+                                    text = remainingText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (group.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (isAlreadyActive) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Alarm for ${group.timeFormatted} is already active in Clock",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                            onOpenClock()
+                                        },
+                                        modifier = Modifier.height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Active ✓",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { onSetGroupedPatternInClock(group) },
+                                        modifier = Modifier.height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "Set",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+
+                                Switch(
+                                    checked = group.isActive,
+                                    onCheckedChange = { active ->
+                                        onToggleAll(group.hour, group.minute, active)
+                                    },
+                                    modifier = Modifier.scale(0.85f)
+                                )
+
+                                IconButton(
+                                    onClick = { groupToDelete = group },
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Text(
-                                        text = "EST",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = "✕",
+                                        color = MaterialTheme.colorScheme.error,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        softWrap = false
+                                        fontSize = 14.sp
                                     )
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = if (pattern.isActive) "Next: in $remaining" else "Deactivated / Missed",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (pattern.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
+                        // Bottom row: 7 circular weekday chips (M, T, W, T, F, S, S)
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (isAlreadyActive) {
-                                FilledTonalButton(
-                                    onClick = {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Alarm for ${pattern.timeFormatted} is already active in Clock",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                        onOpenClock()
-                                    },
-                                    modifier = Modifier.height(34.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                ) {
-                                    Text(
-                                        text = "Active ✓",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { onSetPatternInClock(pattern) },
-                                    modifier = Modifier.height(34.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Set",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-
-                            // Toggle active switch with safe scaling & margin
-                            Switch(
-                                checked = pattern.isActive,
-                                onCheckedChange = { active ->
-                                    onToggleActive(pattern, active)
-                                },
-                                modifier = Modifier.scale(0.85f)
+                            val days = listOf(
+                                Calendar.MONDAY to "M",
+                                Calendar.TUESDAY to "T",
+                                Calendar.WEDNESDAY to "W",
+                                Calendar.THURSDAY to "T",
+                                Calendar.FRIDAY to "F",
+                                Calendar.SATURDAY to "S",
+                                Calendar.SUNDAY to "S"
                             )
-
-                            // Delete button (prompts confirmation dialog)
-                            IconButton(
-                                onClick = {
-                                    patternToDelete = pattern
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text(
-                                    text = "✕",
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
+                            for ((dayOfWeek, dayLetter) in days) {
+                                val isSelected = dayOfWeek in group.activeDays
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                        .border(
+                                            width = if (isSelected) 0.dp else 1.dp,
+                                            color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            onToggleDay(group.hour, group.minute, dayOfWeek, !isSelected)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = dayLetter,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -914,28 +1021,28 @@ fun WeeklyScheduleSection(
         }
     }
 
-    if (patternToDelete != null) {
-        val target = patternToDelete!!
+    if (groupToDelete != null) {
+        val target = groupToDelete!!
         AlertDialog(
-            onDismissRequest = { patternToDelete = null },
+            onDismissRequest = { groupToDelete = null },
             title = {
                 Text(
-                    text = "Delete Learned Alarm?",
+                    text = "Delete Learned Routine?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to delete the learned routine for ${target.dayNameShort} at ${target.timeFormatted}? NextUp won't predict this alarm until it is detected again.",
+                    text = "Are you sure you want to delete the learned routine for ${target.daysLabel} at ${target.timeFormatted}? NextUp won't predict this alarm until it is detected again.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDeletePattern(target)
-                        patternToDelete = null
+                        onDeleteGroup(target.hour, target.minute)
+                        groupToDelete = null
                     }
                 ) {
                     Text(
@@ -946,7 +1053,7 @@ fun WeeklyScheduleSection(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { patternToDelete = null }) {
+                TextButton(onClick = { groupToDelete = null }) {
                     Text("Cancel")
                 }
             }
@@ -1211,4 +1318,257 @@ fun FooterInfo(modifier: Modifier = Modifier) {
         textAlign = TextAlign.Center,
         modifier = modifier
     )
+}
+
+@Composable
+fun LearningPeriodBanner(
+    dayNumber: Int,
+    onStopLearning: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.tertiary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_alarm),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onTertiary
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Learning Routine • Day $dayNumber of 7",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "NextUp is observing your alarm routine. Schedule predictions will become more accurate after a full weekly cycle.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.9f),
+                lineHeight = 18.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onStopLearning,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "Lock Current Reference",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RoutineDataSettingsCard(
+    prefs: NextUpPreferences,
+    dbManager: AlarmDatabaseManager,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val isLearningPeriod by prefs.isLearningPeriodFlow.collectAsStateWithLifecycle()
+    val learningDayNumber by prefs.learningDayNumberFlow.collectAsStateWithLifecycle()
+
+    var showStopLearningDialog by remember { mutableStateOf(false) }
+    var showRestartLearningDialog by remember { mutableStateOf(false) }
+    var showResetAllDialog by remember { mutableStateOf(false) }
+
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            Text(
+                text = "Routine Learning & History",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val statusText = if (isLearningPeriod) {
+                "Learning in progress (Day $learningDayNumber of 7)"
+            } else {
+                "Learning complete (Reference locked)"
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isLearningPeriod) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Option 1: Stop learning and lock current schedule as reference
+            if (isLearningPeriod) {
+                OutlinedButton(
+                    onClick = { showStopLearningDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Stop Learning (Lock Current Reference)")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Option 2: Restart learning phase (keep patterns)
+            OutlinedButton(
+                onClick = { showRestartLearningDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Restart Learning Period (Keep Data)")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Option 3: Destructive reset all alarms & history
+            OutlinedButton(
+                onClick = { showResetAllDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Reset All Alarms & Data")
+            }
+        }
+    }
+
+    if (showStopLearningDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopLearningDialog = false },
+            title = { Text("Lock Routine Reference?") },
+            text = {
+                Text("Stop the 7-day observation period early and keep your current learned alarm schedule as the fixed reference.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showStopLearningDialog = false
+                        prefs.stopLearningPeriod()
+                        android.widget.Toast.makeText(
+                            context,
+                            "Learning stopped. Current routine saved as reference.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                ) {
+                    Text("Lock Reference")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopLearningDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRestartLearningDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestartLearningDialog = false },
+            title = { Text("Restart Learning Period?") },
+            text = {
+                Text("This will restart the 7-day routine observation cycle from Day 1. All existing alarm patterns and history will be kept.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestartLearningDialog = false
+                        prefs.restartLearningPeriod()
+                        android.widget.Toast.makeText(
+                            context,
+                            "7-day learning period restarted",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                ) {
+                    Text("Restart")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartLearningDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showResetAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetAllDialog = false },
+            title = { Text("Reset All Learned Alarms?") },
+            text = {
+                Text("All learned weekly alarm patterns, event history, and routine statistics will be permanently erased. The 7-day routine learning period will restart from Day 1.\n\nActive alarms in your Clock app will not be deleted.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetAllDialog = false
+                        coroutineScope.launch {
+                            dbManager.resetAllData()
+                            prefs.resetLearningPeriod()
+                            NextUpWidgetProvider.updateAllWidgets(context)
+                            AlarmNotificationManager.updateNotification(context)
+                            android.widget.Toast.makeText(
+                                context,
+                                "All learned alarm data has been reset",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }

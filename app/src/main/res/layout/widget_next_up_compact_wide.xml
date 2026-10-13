@@ -6,9 +6,9 @@
     android:background="@drawable/widget_background"
     android:orientation="vertical"
     android:paddingStart="12dp"
-    android:paddingTop="8dp"
+    android:paddingTop="6dp"
     android:paddingEnd="12dp"
-    android:paddingBottom="8dp">
+    android:paddingBottom="6dp">
 
     <!-- Top bar: Header (App) + Alignment toggle button -->
     <LinearLayout
@@ -29,8 +29,8 @@
 
             <ImageView
                 android:id="@+id/widget_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
                 android:contentDescription="@string/app_name"
                 android:src="@drawable/ic_alarm" />
 
@@ -50,9 +50,9 @@
         <!-- Touch target for Alignment Toggle -->
         <ImageView
             android:id="@+id/widget_btn_align_toggle"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:padding="4dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:padding="3dp"
             android:contentDescription="@string/widget_alignment_title"
             android:src="@drawable/ic_format_align_left" />
     </LinearLayout>
@@ -69,7 +69,6 @@
             android:id="@+id/widget_countdown_left"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
             android:autoSizeMaxTextSize="24sp"
             android:autoSizeMinTextSize="12sp"
             android:autoSizeStepGranularity="1sp"
@@ -77,6 +76,7 @@
             android:ellipsize="none"
             android:fontFamily="sans-serif-black"
             android:gravity="start|center_vertical"
+            android:includeFontPadding="false"
             android:textAlignment="viewStart"
             android:maxLines="1"
             android:text="@string/no_alarm_set"
@@ -87,9 +87,11 @@
             android:id="@+id/widget_alarm_time_left"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:ellipsize="none"
             android:fontFamily="sans-serif"
             android:gravity="start|center_vertical"
+            android:includeFontPadding="false"
             android:textAlignment="viewStart"
             android:maxLines="1"
             android:text=""
@@ -111,7 +113,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="2dp"
             android:autoSizeMaxTextSize="24sp"
             android:autoSizeMinTextSize="12sp"
             android:autoSizeStepGranularity="1sp"
@@ -119,6 +120,7 @@
             android:ellipsize="none"
             android:fontFamily="sans-serif-black"
             android:gravity="center"
+            android:includeFontPadding="false"
             android:textAlignment="center"
             android:maxLines="1"
             android:text="@string/no_alarm_set"
@@ -130,9 +132,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
+            android:layout_marginTop="2dp"
             android:ellipsize="none"
             android:fontFamily="sans-serif"
             android:gravity="center"
+            android:includeFontPadding="false"
             android:textAlignment="center"
             android:maxLines="1"
             android:text=""

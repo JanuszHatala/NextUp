@@ -26,8 +26,7 @@ class NextUpWidgetFactory(
 
     private val dbManager = AlarmDatabaseManager(context)
     private val repository = AlarmRepository(context)
-    private val patterns = mutableListOf<AlarmPattern>()
-    private var fromTimeMillis = System.currentTimeMillis()
+    private val items = mutableListOf<Pair<com.nextup.alarmcountdown.data.model.GroupedAlarmPattern, Long>>()
     private var isCentered: Boolean = false
 
     override fun onCreate() {
@@ -42,71 +41,67 @@ class NextUpWidgetFactory(
         prefs.syncFromDisk()
         isCentered = prefs.widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
-        val nextAlarm = repository.getNextAlarm()
         val now = System.currentTimeMillis()
-        val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
-        fromTimeMillis = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
 
         val allPatterns = runBlocking {
             dbManager.getAllPatterns().filter { it.isActive }
         }
 
-        // Filter out pattern matching the current active alarm
-        val filtered = if (hasActiveAlarm) {
-            val cal = Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
-            val cPatternId = AlarmPattern.buildPatternId(
-                cal.get(Calendar.DAY_OF_WEEK),
-                cal.get(Calendar.HOUR_OF_DAY),
-                cal.get(Calendar.MINUTE)
-            )
-            allPatterns.filter { it.patternId != cPatternId }
-        } else {
-            allPatterns
-        }
+        val grouped = com.nextup.alarmcountdown.data.model.GroupedAlarmPattern.fromPatterns(allPatterns)
+        val nextAlarm = repository.getNextAlarm()
+        val confirmedNextMillis = nextAlarm?.triggerTimeMillis
 
-        patterns.clear()
-        // Sort chronologically starting from the active alarm trigger time (or now)
-        patterns.addAll(filtered.sortedBy { it.getNextOccurrenceMillis(fromTimeMillis) })
-        com.nextup.alarmcountdown.util.NextUpLog.i("WidgetFactory", "onDataSetChanged: isCentered=$isCentered, patternsCount=${patterns.size}")
+        val sortedGrouped = grouped.mapNotNull { group ->
+            val nextOccur = group.getNextOccurrenceMillis(now, confirmedNextMillis)
+            if (nextOccur != null) {
+                Pair(group, nextOccur)
+            } else {
+                null
+            }
+        }.sortedBy { it.second }
+
+        items.clear()
+        items.addAll(sortedGrouped)
+        com.nextup.alarmcountdown.util.NextUpLog.i("WidgetFactory", "onDataSetChanged: isCentered=$isCentered, count=${items.size}")
     }
 
     override fun onDestroy() {
-        patterns.clear()
+        items.clear()
     }
 
-    override fun getCount(): Int = patterns.size
+    override fun getCount(): Int = items.size
 
     override fun getViewAt(position: Int): RemoteViews? {
-        if (position < 0 || position >= patterns.size) return null
+        if (position < 0 || position >= items.size) return null
 
-        val pattern = patterns[position]
-        val occurrenceTime = pattern.getNextOccurrenceMillis(fromTimeMillis)
-        val text = AlarmFormatter.formatRoutineLine(
-            pattern.dayNameShort,
-            pattern.timeFormatted,
-            occurrenceTime,
-            System.currentTimeMillis()
+        val (group, occurrenceTime) = items[position]
+        val timeText = AlarmFormatter.formatRoutineTimeAndCountdown(
+            timeFormatted = group.timeFormatted,
+            occurrenceMillis = occurrenceTime,
+            nowMillis = System.currentTimeMillis()
         )
+        val daysText = group.daysLabel
 
         val currentCentered = NextUpPreferences.getInstance(context).widgetAlignment == NextUpPreferences.ALIGNMENT_CENTER
 
         com.nextup.alarmcountdown.util.NextUpLog.d(
             "WidgetFactory",
-            "getViewAt(pos=$position): currentCentered=$currentCentered, text='$text'"
+            "getViewAt(pos=$position): currentCentered=$currentCentered, time='$timeText', days='$daysText'"
         )
 
         return RemoteViews(context.packageName, R.layout.widget_item_routine).apply {
             if (currentCentered) {
-                setViewVisibility(R.id.widget_item_routine_text_left, android.view.View.GONE)
-                setViewVisibility(R.id.widget_item_routine_text_center, android.view.View.VISIBLE)
-                setTextViewText(R.id.widget_item_routine_text_center, text)
-                setOnClickFillInIntent(R.id.widget_item_routine_text_center, Intent())
+                setViewVisibility(R.id.widget_item_routine_container_left, android.view.View.GONE)
+                setViewVisibility(R.id.widget_item_routine_container_center, android.view.View.VISIBLE)
+                setTextViewText(R.id.widget_item_routine_time_center, timeText)
+                setTextViewText(R.id.widget_item_routine_days_center, daysText)
             } else {
-                setViewVisibility(R.id.widget_item_routine_text_center, android.view.View.GONE)
-                setViewVisibility(R.id.widget_item_routine_text_left, android.view.View.VISIBLE)
-                setTextViewText(R.id.widget_item_routine_text_left, text)
-                setOnClickFillInIntent(R.id.widget_item_routine_text_left, Intent())
+                setViewVisibility(R.id.widget_item_routine_container_center, android.view.View.GONE)
+                setViewVisibility(R.id.widget_item_routine_container_left, android.view.View.VISIBLE)
+                setTextViewText(R.id.widget_item_routine_time_left, timeText)
+                setTextViewText(R.id.widget_item_routine_days_left, daysText)
             }
+            setOnClickFillInIntent(R.id.widget_item_root, Intent())
         }
     }
 

@@ -2,40 +2,86 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_item_root"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp">
 
-    <!-- Left-aligned variant -->
-    <TextView
-        android:id="@+id/widget_item_routine_text_left"
+    <!-- Left-aligned variant: Time bold on top, Days indented on bottom -->
+    <LinearLayout
+        android:id="@+id/widget_item_routine_container_left"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="2dp"
-        android:paddingBottom="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="start|center_vertical"
-        android:textAlignment="viewStart"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp" />
+        android:orientation="vertical"
+        android:visibility="gone">
 
-    <!-- Center-aligned variant -->
-    <TextView
-        android:id="@+id/widget_item_routine_text_center"
+        <TextView
+            android:id="@+id/widget_item_routine_time_left"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="start|center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textAlignment="viewStart"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_item_routine_days_left"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif"
+            android:gravity="start|center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textAlignment="viewStart"
+            android:textColor="@color/widget_on_surface_variant"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Center-aligned variant: Time bold on top, Days centered below -->
+    <LinearLayout
+        android:id="@+id/widget_item_routine_container_center"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="2dp"
-        android:paddingBottom="2dp"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif"
-        android:gravity="center"
-        android:textAlignment="center"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:textColor="@color/widget_on_surface"
-        android:textSize="11sp" />
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_item_routine_time_center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textAlignment="center"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_item_routine_days_center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textAlignment="center"
+            android:textColor="@color/widget_on_surface_variant"
+            android:textSize="10sp" />
+    </LinearLayout>
 
 </FrameLayout>

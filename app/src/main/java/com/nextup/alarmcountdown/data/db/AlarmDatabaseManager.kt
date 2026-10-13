@@ -12,7 +12,7 @@ import java.util.Calendar
 
 class AlarmDatabaseManager(context: Context) {
 
-    private val dbHelper = NextUpDatabaseHelper(context)
+    private val dbHelper = NextUpDatabaseHelper.getInstance(context)
 
     /**
      * Records a new confirmed or triggered alarm event into SQLite.
@@ -331,12 +331,64 @@ class AlarmDatabaseManager(context: Context) {
         )
     }
 
+    suspend fun upsertPattern(dayOfWeek: Int, hour: Int, minute: Int, isActive: Boolean): Unit = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val patternId = AlarmPattern.buildPatternId(dayOfWeek, hour, minute)
+        val values = ContentValues().apply {
+            put(NextUpDatabaseHelper.COL_PATTERN_IS_ACTIVE, if (isActive) 1 else 0)
+        }
+        val rows = db.update(
+            NextUpDatabaseHelper.TABLE_ALARM_PATTERNS,
+            values,
+            "${NextUpDatabaseHelper.COL_PATTERN_ID} = ?",
+            arrayOf(patternId)
+        )
+        if (rows == 0) {
+            val insertValues = ContentValues().apply {
+                put(NextUpDatabaseHelper.COL_PATTERN_ID, patternId)
+                put(NextUpDatabaseHelper.COL_PATTERN_HOUR, hour)
+                put(NextUpDatabaseHelper.COL_PATTERN_MINUTE, minute)
+                put(NextUpDatabaseHelper.COL_PATTERN_DAY_OF_WEEK, dayOfWeek)
+                put(NextUpDatabaseHelper.COL_PATTERN_IS_ACTIVE, if (isActive) 1 else 0)
+                put(NextUpDatabaseHelper.COL_PATTERN_FIRST_SEEN, System.currentTimeMillis())
+                put(NextUpDatabaseHelper.COL_PATTERN_LAST_SEEN, System.currentTimeMillis())
+                put(NextUpDatabaseHelper.COL_PATTERN_CONFIRMED_COUNT, 1)
+                put(NextUpDatabaseHelper.COL_PATTERN_MISSED_COUNT, 0)
+                put(NextUpDatabaseHelper.COL_PATTERN_CONSECUTIVE_WEEKS, 1)
+                put(NextUpDatabaseHelper.COL_PATTERN_CONFIDENCE, 1.0f)
+            }
+            db.insert(NextUpDatabaseHelper.TABLE_ALARM_PATTERNS, null, insertValues)
+        }
+    }
+
+    suspend fun toggleAllPatternsForTime(hour: Int, minute: Int, isActive: Boolean): Unit = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put(NextUpDatabaseHelper.COL_PATTERN_IS_ACTIVE, if (isActive) 1 else 0)
+        }
+        db.update(
+            NextUpDatabaseHelper.TABLE_ALARM_PATTERNS,
+            values,
+            "${NextUpDatabaseHelper.COL_PATTERN_HOUR} = ? AND ${NextUpDatabaseHelper.COL_PATTERN_MINUTE} = ?",
+            arrayOf(hour.toString(), minute.toString())
+        )
+    }
+
     suspend fun deletePattern(patternId: String): Unit = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         db.delete(
             NextUpDatabaseHelper.TABLE_ALARM_PATTERNS,
             "${NextUpDatabaseHelper.COL_PATTERN_ID} = ?",
             arrayOf(patternId)
+        )
+    }
+
+    suspend fun deleteAllPatternsForTime(hour: Int, minute: Int): Unit = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete(
+            NextUpDatabaseHelper.TABLE_ALARM_PATTERNS,
+            "${NextUpDatabaseHelper.COL_PATTERN_HOUR} = ? AND ${NextUpDatabaseHelper.COL_PATTERN_MINUTE} = ?",
+            arrayOf(hour.toString(), minute.toString())
         )
     }
 
@@ -375,6 +427,22 @@ class AlarmDatabaseManager(context: Context) {
             }
         }
         list
+    }
+
+    /**
+     * Resets all learned data: clears alarm patterns, alarm history events, and routine statistics.
+     */
+    suspend fun resetAllData(): Unit = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(NextUpDatabaseHelper.TABLE_ALARM_PATTERNS, null, null)
+            db.delete(NextUpDatabaseHelper.TABLE_ALARM_EVENTS, null, null)
+            db.delete(NextUpDatabaseHelper.TABLE_ROUTINE_STATS, null, null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     private fun cursorToPattern(cursor: Cursor): AlarmPattern {

@@ -11,8 +11,8 @@ android {
         applicationId = "com.nextup.alarmcountdown"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.3.4"
+        versionCode = 15
+        versionName = "1.4.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

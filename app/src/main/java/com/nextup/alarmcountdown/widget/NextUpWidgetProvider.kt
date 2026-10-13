@@ -18,6 +18,7 @@ import com.nextup.alarmcountdown.MainActivity
 import com.nextup.alarmcountdown.R
 import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
 import com.nextup.alarmcountdown.data.model.AlarmPattern
+import com.nextup.alarmcountdown.data.model.GroupedAlarmPattern
 import com.nextup.alarmcountdown.data.AlarmRepository
 import com.nextup.alarmcountdown.data.NextUpPreferences
 import com.nextup.alarmcountdown.receiver.AlarmBroadcastReceiver
@@ -126,8 +127,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             alignTogglePendingIntent: PendingIntent,
             alignIconRes: Int,
             isCentered: Boolean,
-            routinePatterns: List<AlarmPattern>,
-            fromTimeMillis: Long
+            groupedRoutineAlarms: List<Pair<GroupedAlarmPattern, Long>>
         ): RemoteViews {
             return RemoteViews(context.packageName, R.layout.widget_next_up_tall).apply {
                 setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
@@ -166,34 +166,34 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setEmptyView(R.id.widget_alarms_list, R.id.widget_predicted_empty_left)
                 }
 
-                // Populate routine list items
+                // Populate grouped routine list items
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val builder = RemoteViews.RemoteCollectionItems.Builder()
                     val now = System.currentTimeMillis()
-                    for (pattern in routinePatterns) {
-                        val occurrenceTime = pattern.getNextOccurrenceMillis(fromTimeMillis)
-                        val text = AlarmFormatter.formatRoutineLine(
-                            pattern.dayNameShort,
-                            pattern.timeFormatted,
-                            occurrenceTime,
-                            now
+                    for ((index, item) in groupedRoutineAlarms.withIndex()) {
+                        val (group, occurrenceTime) = item
+                        val timeText = AlarmFormatter.formatRoutineTimeAndCountdown(
+                            timeFormatted = group.timeFormatted,
+                            occurrenceMillis = occurrenceTime,
+                            nowMillis = now
                         )
+                        val daysText = group.daysLabel
+                        NextUpLog.i("WidgetTall", "Row $index: time='$timeText', days='$daysText'")
                         val rowView = RemoteViews(context.packageName, R.layout.widget_item_routine).apply {
                             if (isCentered) {
-                                setViewVisibility(R.id.widget_item_routine_text_left, View.GONE)
-                                setViewVisibility(R.id.widget_item_routine_text_center, View.VISIBLE)
-                                setTextViewText(R.id.widget_item_routine_text_center, text)
-                                setOnClickFillInIntent(R.id.widget_item_root, Intent())
-                                setOnClickFillInIntent(R.id.widget_item_routine_text_center, Intent())
+                                setViewVisibility(R.id.widget_item_routine_container_left, View.GONE)
+                                setViewVisibility(R.id.widget_item_routine_container_center, View.VISIBLE)
+                                setTextViewText(R.id.widget_item_routine_time_center, timeText)
+                                setTextViewText(R.id.widget_item_routine_days_center, daysText)
                             } else {
-                                setViewVisibility(R.id.widget_item_routine_text_center, View.GONE)
-                                setViewVisibility(R.id.widget_item_routine_text_left, View.VISIBLE)
-                                setTextViewText(R.id.widget_item_routine_text_left, text)
-                                setOnClickFillInIntent(R.id.widget_item_root, Intent())
-                                setOnClickFillInIntent(R.id.widget_item_routine_text_left, Intent())
+                                setViewVisibility(R.id.widget_item_routine_container_center, View.GONE)
+                                setViewVisibility(R.id.widget_item_routine_container_left, View.VISIBLE)
+                                setTextViewText(R.id.widget_item_routine_time_left, timeText)
+                                setTextViewText(R.id.widget_item_routine_days_left, daysText)
                             }
+                            setOnClickFillInIntent(R.id.widget_item_root, Intent())
                         }
-                        builder.addItem(pattern.patternId.hashCode().toLong(), rowView)
+                        builder.addItem((group.hour * 60 + group.minute).toLong(), rowView)
                     }
                     builder.setHasStableIds(true)
                     builder.setViewTypeCount(1)
@@ -217,9 +217,11 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val repository = AlarmRepository(context)
             val nextAlarm = repository.getNextAlarm()
 
-            val countdownText = AlarmFormatter.formatRemaining(nextAlarm?.triggerTimeMillis)
-            val fullTargetDateTimeText = AlarmFormatter.formatTargetDateTime(nextAlarm?.triggerTimeMillis)
-            val shortTargetDateTimeText = AlarmFormatter.formatShortTargetDateTime(nextAlarm?.triggerTimeMillis)
+            val triggerTime = nextAlarm?.triggerTimeMillis
+
+            val countdownText = AlarmFormatter.formatRemaining(triggerTime)
+            val fullTargetDateTimeText = AlarmFormatter.formatTargetDateTime(triggerTime)
+            val shortTargetDateTimeText = AlarmFormatter.formatShortTargetDateTime(triggerTime)
 
             // Main clock tap -> Google Clock
             val clockPendingIntent = run {
@@ -290,20 +292,16 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 dbManager.getAllPatterns().filter { it.isActive }
             }
             val now = System.currentTimeMillis()
-            val hasActiveAlarm = nextAlarm?.triggerTimeMillis != null && nextAlarm.triggerTimeMillis > now
-            val fromTimeMillis = if (hasActiveAlarm) nextAlarm.triggerTimeMillis else now
-            val filteredPatterns = if (hasActiveAlarm) {
-                val cal = Calendar.getInstance().apply { timeInMillis = nextAlarm.triggerTimeMillis }
-                val cPatternId = AlarmPattern.buildPatternId(
-                    cal.get(Calendar.DAY_OF_WEEK),
-                    cal.get(Calendar.HOUR_OF_DAY),
-                    cal.get(Calendar.MINUTE)
-                )
-                allPatterns.filter { it.patternId != cPatternId }
-            } else {
-                allPatterns
-            }
-            val sortedPatterns = filteredPatterns.sortedBy { it.getNextOccurrenceMillis(fromTimeMillis) }
+
+            val grouped = GroupedAlarmPattern.fromPatterns(allPatterns)
+            val sortedGrouped = grouped.mapNotNull { group ->
+                val nextOccur = group.getNextOccurrenceMillis(now, triggerTime)
+                if (nextOccur != null) {
+                    Pair(group, nextOccur)
+                } else {
+                    null
+                }
+            }.sortedBy { it.second }
 
             // 3. Tall / Expanded (2x2 and taller): full header, countdown, subheader + scrollable collection
             val tallViews = buildTallViews(
@@ -316,8 +314,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 alignTogglePendingIntent = alignTogglePendingIntent,
                 alignIconRes = alignIconRes,
                 isCentered = isCentered,
-                routinePatterns = sortedPatterns,
-                fromTimeMillis = fromTimeMillis
+                groupedRoutineAlarms = sortedGrouped
             )
 
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
@@ -358,7 +355,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             NextUpLog.d("WidgetProvider", "updateWidget(id=$appWidgetId): updateAppWidget dispatched ($layoutName)")
 
             // Auto-refresh exactly when the alarm is due to ring
-            val triggerTime = nextAlarm?.triggerTimeMillis
             if (triggerTime != null && triggerTime > System.currentTimeMillis()) {
                 val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                     action = AlarmBroadcastReceiver.ACTION_REFRESH_WIDGET

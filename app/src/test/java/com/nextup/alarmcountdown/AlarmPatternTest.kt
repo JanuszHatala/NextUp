@@ -132,4 +132,57 @@ class AlarmPatternTest {
         // 3rd should be Wed 08:30 (next week)
         assertEquals(patWedMorning.patternId, sorted[2].patternId)
     }
+
+    @Test
+    fun testGroupedAlarmPatternWithConfirmedNextAlarmSkippingDeactivated() {
+        val nowCal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 10)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val now = nowCal.timeInMillis
+
+        val confirmedCal = Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, 7)
+            set(Calendar.MINUTE, 30)
+        }
+        val confirmedNextMillis = confirmedCal.timeInMillis
+
+        val group5am = com.nextup.alarmcountdown.data.model.GroupedAlarmPattern(
+            hour = 5,
+            minute = 0,
+            activeDays = setOf(Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY)
+        )
+        val group730am = com.nextup.alarmcountdown.data.model.GroupedAlarmPattern(
+            hour = 7,
+            minute = 30,
+            activeDays = setOf(Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY)
+        )
+
+        val next5am = group5am.getNextOccurrenceMillis(now, confirmedNextMillis)
+        val next730am = group730am.getNextOccurrenceMillis(now, confirmedNextMillis)
+
+        assertNotNull(next5am)
+        assertNotNull(next730am)
+
+        // 7:30am matches the confirmed next alarm today
+        val cal730 = Calendar.getInstance().apply { timeInMillis = next730am!! }
+        assertEquals(Calendar.SUNDAY, cal730.get(Calendar.DAY_OF_WEEK))
+        assertEquals(7, cal730.get(Calendar.HOUR_OF_DAY))
+
+        // 5:00am is skipped today because it is prior to 7:30am, so next occurrence is Thursday
+        val cal5 = Calendar.getInstance().apply { timeInMillis = next5am!! }
+        assertEquals(Calendar.THURSDAY, cal5.get(Calendar.DAY_OF_WEEK))
+        assertEquals(5, cal5.get(Calendar.HOUR_OF_DAY))
+
+        // Sorting must put 7:30am FIRST
+        val list = listOf(group5am, group730am).sortedBy {
+            it.getNextOccurrenceMillis(now, confirmedNextMillis)
+        }
+        assertEquals(7, list[0].hour)
+        assertEquals(5, list[1].hour)
+    }
 }
