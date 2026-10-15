@@ -43,9 +43,7 @@ class NextUpWidgetFactory(
 
         val now = System.currentTimeMillis()
 
-        val allPatterns = runBlocking {
-            dbManager.getAllPatterns().filter { it.isActive }
-        }
+        val allPatterns = dbManager.getAllPatternsDirect().filter { it.isActive }
 
         val grouped = com.nextup.alarmcountdown.data.model.GroupedAlarmPattern.fromPatterns(allPatterns)
         val nextAlarm = repository.getNextAlarm()

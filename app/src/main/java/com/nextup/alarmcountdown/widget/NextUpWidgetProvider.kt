@@ -288,9 +288,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             )
 
             val dbManager = AlarmDatabaseManager(context)
-            val allPatterns = runBlocking {
-                dbManager.getAllPatterns().filter { it.isActive }
-            }
+            val allPatterns = dbManager.getAllPatternsDirect().filter { it.isActive }
             val now = System.currentTimeMillis()
 
             val grouped = GroupedAlarmPattern.fromPatterns(allPatterns)

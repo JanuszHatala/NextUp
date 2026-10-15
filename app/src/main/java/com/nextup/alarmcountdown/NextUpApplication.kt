@@ -15,16 +15,24 @@ class NextUpApplication : Application() {
         NextUpLog.init(this)
         NextUpLog.i("App", "NextUpApplication initialized")
 
-        val screenFilter = IntentFilter().apply {
+        val systemFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_PRESENT)
+            addAction(android.app.AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }
-        registerReceiver(object : BroadcastReceiver() {
+        val dynamicReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                NextUpLog.d("App", "Dynamic screen event: ${intent.action}")
+                NextUpLog.d("App", "Dynamic system event: ${intent.action}")
                 AlarmNotificationManager.updateNotification(context)
                 NextUpWidgetProvider.updateAllWidgets(context)
             }
-        }, screenFilter)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(dynamicReceiver, systemFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(dynamicReceiver, systemFilter)
+        }
     }
 }

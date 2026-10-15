@@ -287,9 +287,10 @@ class AlarmDatabaseManager(context: Context) {
     }
 
     /**
-     * Retrieves all detected alarm patterns.
+     * Synchronously retrieves all detected alarm patterns directly from SQLite.
+     * Suitable for background threads, widgets, and services without runBlocking.
      */
-    suspend fun getAllPatterns(): List<AlarmPattern> = withContext(Dispatchers.IO) {
+    fun getAllPatternsDirect(): List<AlarmPattern> {
         val list = mutableListOf<AlarmPattern>()
         val db = dbHelper.readableDatabase
         val cursor = db.query(
@@ -306,7 +307,14 @@ class AlarmDatabaseManager(context: Context) {
                 list.add(cursorToPattern(it))
             }
         }
-        list
+        return list
+    }
+
+    /**
+     * Retrieves all detected alarm patterns asynchronously.
+     */
+    suspend fun getAllPatterns(): List<AlarmPattern> = withContext(Dispatchers.IO) {
+        getAllPatternsDirect()
     }
 
     /**

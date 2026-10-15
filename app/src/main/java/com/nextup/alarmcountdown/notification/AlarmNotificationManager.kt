@@ -71,16 +71,18 @@ object AlarmNotificationManager {
     }
 
     fun updateNotification(context: Context) {
-        val prefs = NextUpPreferences.getInstance(context)
+        val appContext = context.applicationContext
+        val prefs = NextUpPreferences.getInstance(appContext)
+        prefs.syncFromDisk()
         if (!prefs.isNotificationEnabled) {
-            cancelNotification(context)
+            cancelNotification(appContext)
             return
         }
 
         // Check POST_NOTIFICATIONS permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
-                    context,
+                    appContext,
                     Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
@@ -88,9 +90,9 @@ object AlarmNotificationManager {
             }
         }
 
-        createNotificationChannel(context)
+        createNotificationChannel(appContext)
 
-        val repository = AlarmRepository(context)
+        val repository = AlarmRepository(appContext)
         val nextAlarm = repository.getNextAlarm()
         val triggerTime = nextAlarm?.triggerTimeMillis
         val hasValidAlarm = triggerTime != null && triggerTime > System.currentTimeMillis()
@@ -99,22 +101,22 @@ object AlarmNotificationManager {
         val targetDateTimeText = AlarmFormatter.formatTargetDateTime(triggerTime)
 
         // 1. Content Intent -> Open NextUp App
-        val appIntent = Intent(context, MainActivity::class.java).apply {
+        val appIntent = Intent(appContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val appPendingIntent = PendingIntent.getActivity(
-            context,
+            appContext,
             201,
             appIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // 2. Action: Dismiss Notification (Turns setting off and dismisses)
-        val dismissNotifIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+        val dismissNotifIntent = Intent(appContext, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_DISMISS_NOTIFICATION
         }
         val dismissNotifPendingIntent = PendingIntent.getBroadcast(
-            context,
+            appContext,
             202,
             dismissNotifIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -122,7 +124,7 @@ object AlarmNotificationManager {
 
         // Status bar icon
         val statusIcon = StatusIconGenerator.createStatusIcon(
-            context,
+            appContext,
             triggerTime,
             prefs.isStatusBarInfoEnabled
         )
@@ -139,7 +141,7 @@ object AlarmNotificationManager {
             "Tap to configure or set alarms"
         }
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(statusIcon)
             .setContentTitle(title)
             .setContentText(contentText)
@@ -165,7 +167,7 @@ object AlarmNotificationManager {
             }
 
             val dismissAlarmPendingIntent = PendingIntent.getActivity(
-                context,
+                appContext,
                 203,
                 clockDismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -184,13 +186,18 @@ object AlarmNotificationManager {
             dismissNotifPendingIntent
         )
 
+        com.nextup.alarmcountdown.util.NextUpLog.i(
+            "NotificationManager",
+            "updateNotification: hasValidAlarm=$hasValidAlarm, triggerTime=$triggerTime, title='$title', contentText='$contentText'"
+        )
+
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+            NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, builder.build())
         } catch (ignored: SecurityException) {
         }
 
         // Smart background scheduling: hourly when > 1h, per-minute when <= 1h, ring transition when passed
-        scheduleSmartNotificationUpdate(context, triggerTime)
+        scheduleSmartNotificationUpdate(appContext, triggerTime)
     }
 
     /**
