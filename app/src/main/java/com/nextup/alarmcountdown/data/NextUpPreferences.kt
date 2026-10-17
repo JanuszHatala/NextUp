@@ -2,11 +2,16 @@ package com.nextup.alarmcountdown.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
-class NextUpPreferences(context: Context) {
+class NextUpPreferences(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -18,7 +23,9 @@ class NextUpPreferences(context: Context) {
         const val KEY_WIDGET_ALIGNMENT = "widget_alignment"
         private const val KEY_LEARNING_START_EPOCH = "learning_start_epoch"
         private const val KEY_IS_LEARNING_STOPPED = "is_learning_stopped"
-        const val LEARNING_PERIOD_MILLIS = 7 * 24 * 60 * 60 * 1000L
+        private const val KEY_LEARNING_INITIALIZED = "learning_initialized"
+        const val LEARNING_PERIOD_DAYS = 7
+        const val LEARNING_PERIOD_MILLIS = LEARNING_PERIOD_DAYS * 24 * 60 * 60 * 1000L
 
         const val ALIGNMENT_LEFT = "left"
         const val ALIGNMENT_CENTER = "center"
@@ -30,6 +37,24 @@ class NextUpPreferences(context: Context) {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: NextUpPreferences(context.applicationContext).also { INSTANCE = it }
             }
+        }
+    }
+
+    init {
+        ensureLearningInitialized()
+    }
+
+    private fun ensureLearningInitialized() {
+        val isInitialized = prefs.getBoolean(KEY_LEARNING_INITIALIZED, false)
+        val storedStart = prefs.getLong(KEY_LEARNING_START_EPOCH, 0L)
+        val earliestAlarm = AlarmDatabaseManager(context).getEarliestRecordedAlarmEpoch()
+
+        if (!isInitialized || storedStart <= 0L) {
+            val startEpoch = earliestAlarm ?: if (storedStart > 0L) storedStart else System.currentTimeMillis()
+            prefs.edit()
+                .putLong(KEY_LEARNING_START_EPOCH, startEpoch)
+                .putBoolean(KEY_LEARNING_INITIALIZED, true)
+                .apply()
         }
     }
 
@@ -77,15 +102,14 @@ class NextUpPreferences(context: Context) {
 
     var learningStartEpoch: Long
         get() {
-            var start = prefs.getLong(KEY_LEARNING_START_EPOCH, 0L)
-            if (start <= 0L) {
-                start = System.currentTimeMillis()
-                prefs.edit().putLong(KEY_LEARNING_START_EPOCH, start).apply()
-            }
-            return start
+            ensureLearningInitialized()
+            return prefs.getLong(KEY_LEARNING_START_EPOCH, System.currentTimeMillis())
         }
         set(value) {
-            prefs.edit().putLong(KEY_LEARNING_START_EPOCH, value).apply()
+            prefs.edit()
+                .putLong(KEY_LEARNING_START_EPOCH, value)
+                .putBoolean(KEY_LEARNING_INITIALIZED, true)
+                .apply()
             updateLearningFlows()
         }
 
@@ -104,18 +128,24 @@ class NextUpPreferences(context: Context) {
 
     private fun computeIsLearningPeriod(): Boolean {
         if (prefs.getBoolean(KEY_IS_LEARNING_STOPPED, false)) return false
-        val start = prefs.getLong(KEY_LEARNING_START_EPOCH, 0L)
-        if (start <= 0L) return true
-        val elapsed = System.currentTimeMillis() - start
-        return elapsed in 0 until LEARNING_PERIOD_MILLIS
+        val start = learningStartEpoch
+        val startDay = Instant.ofEpochMilli(start)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        val today = LocalDate.now()
+        val daysElapsed = ChronoUnit.DAYS.between(startDay, today).coerceAtLeast(0L)
+        return daysElapsed in 0 until LEARNING_PERIOD_DAYS
     }
 
     private fun computeLearningDayNumber(): Int {
-        val start = prefs.getLong(KEY_LEARNING_START_EPOCH, 0L)
-        if (start <= 0L) return 1
-        val elapsed = (System.currentTimeMillis() - start).coerceAtLeast(0L)
-        val day = (elapsed / (24 * 60 * 60 * 1000L)) + 1
-        return day.coerceIn(1L, 7L).toInt()
+        val start = learningStartEpoch
+        val startDay = Instant.ofEpochMilli(start)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        val today = LocalDate.now()
+        val daysElapsed = ChronoUnit.DAYS.between(startDay, today).coerceAtLeast(0L)
+        val day = (daysElapsed + 1).coerceIn(1L, LEARNING_PERIOD_DAYS.toLong()).toInt()
+        return day
     }
 
     private fun updateLearningFlows() {
@@ -128,6 +158,7 @@ class NextUpPreferences(context: Context) {
         prefs.edit()
             .putLong(KEY_LEARNING_START_EPOCH, now)
             .putBoolean(KEY_IS_LEARNING_STOPPED, false)
+            .putBoolean(KEY_LEARNING_INITIALIZED, true)
             .apply()
         updateLearningFlows()
     }
@@ -144,6 +175,7 @@ class NextUpPreferences(context: Context) {
     }
 
     fun syncFromDisk() {
+        ensureLearningInitialized()
         _isNotificationEnabledFlow.value = prefs.getBoolean(KEY_PERMANENT_NOTIFICATION_ENABLED, false)
         _isStatusBarInfoEnabledFlow.value = prefs.getBoolean(KEY_STATUS_BAR_INFO_ENABLED, true)
         val alignment = prefs.getString(KEY_WIDGET_ALIGNMENT, ALIGNMENT_LEFT) ?: ALIGNMENT_LEFT

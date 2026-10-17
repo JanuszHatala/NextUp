@@ -21,10 +21,12 @@ class NextUpApplication : Application() {
             addAction(android.app.AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(Intent.ACTION_DATE_CHANGED)
         }
         val dynamicReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 NextUpLog.d("App", "Dynamic system event: ${intent.action}")
+                com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context).syncFromDisk()
                 AlarmNotificationManager.updateNotification(context)
                 NextUpWidgetProvider.updateAllWidgets(context)
             }

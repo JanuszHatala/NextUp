@@ -453,6 +453,46 @@ class AlarmDatabaseManager(context: Context) {
         }
     }
 
+    /**
+     * Returns the earliest timestamp of any recorded alarm event or pattern,
+     * or null if no alarms have ever been recorded.
+     */
+    fun getEarliestRecordedAlarmEpoch(): Long? {
+        val db = dbHelper.readableDatabase
+        // 1. Try alarm_events table (min recorded_epoch_millis)
+        val cursor = db.rawQuery(
+            "SELECT MIN(${NextUpDatabaseHelper.COL_EVENT_RECORDED_EPOCH}) FROM ${NextUpDatabaseHelper.TABLE_ALARM_EVENTS} WHERE ${NextUpDatabaseHelper.COL_EVENT_RECORDED_EPOCH} > 0",
+            null
+        )
+        val fromEvents = cursor.use {
+            if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null
+        }
+        if (fromEvents != null && fromEvents > 0L) return fromEvents
+
+        // 2. Fallback to alarm_patterns table (min first_seen_millis)
+        val patternCursor = db.rawQuery(
+            "SELECT MIN(${NextUpDatabaseHelper.COL_PATTERN_FIRST_SEEN}) FROM ${NextUpDatabaseHelper.TABLE_ALARM_PATTERNS} WHERE ${NextUpDatabaseHelper.COL_PATTERN_FIRST_SEEN} > 0",
+            null
+        )
+        return patternCursor.use {
+            if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null
+        }
+    }
+
+    /**
+     * Returns the count of distinct calendar days with recorded alarm events in the database.
+     */
+    fun getDistinctAlarmDaysCount(): Int {
+        val db = dbHelper.readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT COUNT(DISTINCT printf('%04d-%02d-%02d', ${NextUpDatabaseHelper.COL_EVENT_YEAR}, ${NextUpDatabaseHelper.COL_EVENT_MONTH}, ${NextUpDatabaseHelper.COL_EVENT_DAY_OF_MONTH})) FROM ${NextUpDatabaseHelper.TABLE_ALARM_EVENTS}",
+            null
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getInt(0) else 0
+        }
+    }
+
     private fun cursorToPattern(cursor: Cursor): AlarmPattern {
         return AlarmPattern(
             patternId = cursor.getString(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_PATTERN_ID)),
