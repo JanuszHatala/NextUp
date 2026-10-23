@@ -17,6 +17,7 @@ class NextUpApplication : Application() {
 
         val systemFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_USER_PRESENT)
             addAction(android.app.AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
             addAction(Intent.ACTION_TIME_CHANGED)
@@ -29,6 +30,7 @@ class NextUpApplication : Application() {
                 com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context).syncFromDisk()
                 AlarmNotificationManager.updateNotification(context)
                 NextUpWidgetProvider.updateAllWidgets(context)
+                com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
             }
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -36,5 +38,7 @@ class NextUpApplication : Application() {
         } else {
             registerReceiver(dynamicReceiver, systemFilter)
         }
+
+        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(this)
     }
 }

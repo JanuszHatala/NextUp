@@ -58,25 +58,32 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_USER_PRESENT,
-            Intent.ACTION_SCREEN_ON -> {
+            Intent.ACTION_SCREEN_ON,
+            Intent.ACTION_SCREEN_OFF -> {
                 val action = intent.action
                 val appContext = context.applicationContext
                 val shouldUpdateLearning = action == AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED ||
                         action == Intent.ACTION_BOOT_COMPLETED ||
                         action == Intent.ACTION_MY_PACKAGE_REPLACED
 
-                // 1. Immediate sync notification update (< 2ms) so status bar and shade update instantly
+                // 1. Immediate sync notification and widget update (< 5ms)
                 try {
                     com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(appContext)
                 } catch (e: Exception) {
                     com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Immediate notification update failed", e)
                 }
+                try {
+                    NextUpWidgetProvider.updateAllWidgets(appContext)
+                } catch (e: Exception) {
+                    com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Immediate widget update failed", e)
+                }
+                com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(appContext)
 
-                // 2. Background async work for settling, learning updates, and home screen widgets
-                val pendingResult = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        if (shouldUpdateLearning) {
+                // 2. Background async work for settling and learning updates (only for clock changes)
+                if (shouldUpdateLearning) {
+                    val pendingResult = goAsync()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
                             // Debounce settling delay: Google Clock operations (cancel old -> schedule new)
                             // take up to 100-150ms to settle state in AlarmManagerService
                             kotlinx.coroutines.delay(150)
@@ -87,21 +94,22 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                                 val engine = AlarmLearningEngine(appContext)
                                 engine.onConfirmedAlarmObserved(nextAlarm.triggerTimeMillis)
                             }
-                        }
-                    } catch (e: Exception) {
-                        com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Learning update error", e)
-                    } finally {
-                        try {
-                            com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(appContext)
                         } catch (e: Exception) {
-                            com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Notification update error in finally", e)
+                            com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Learning update error", e)
+                        } finally {
+                            try {
+                                com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(appContext)
+                            } catch (e: Exception) {
+                                com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Notification update error in finally", e)
+                            }
+                            try {
+                                NextUpWidgetProvider.updateAllWidgets(appContext)
+                            } catch (e: Exception) {
+                                com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Widget update error in finally", e)
+                            }
+                            com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(appContext)
+                            pendingResult.finish()
                         }
-                        try {
-                            NextUpWidgetProvider.updateAllWidgets(appContext)
-                        } catch (e: Exception) {
-                            com.nextup.alarmcountdown.util.NextUpLog.e("Receiver", "Widget update error in finally", e)
-                        }
-                        pendingResult.finish()
                     }
                 }
             }

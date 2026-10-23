@@ -60,22 +60,23 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 "updateAllWidgets: found ${appWidgetIds?.size ?: 0} widgets: ${appWidgetIds?.contentToString()}"
             )
             if (appWidgetIds != null && appWidgetIds.isNotEmpty()) {
+                val appContext = context.applicationContext
                 for (widgetId in appWidgetIds) {
                     updateWidget(appContext, appWidgetManager, widgetId)
                 }
             }
+            com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
         }
 
         private fun buildTinyViews(
             context: Context,
             countdownText: String,
-            clockPendingIntent: PendingIntent,
             appPendingIntent: PendingIntent
         ): RemoteViews {
             return RemoteViews(context.packageName, R.layout.widget_next_up_tiny).apply {
                 setTextViewText(R.id.widget_countdown, countdownText)
-                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
-                setOnClickPendingIntent(R.id.widget_countdown, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_root, appPendingIntent)
+                setOnClickPendingIntent(R.id.widget_countdown, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
             }
         }
@@ -84,14 +85,13 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             context: Context,
             countdownText: String,
             shortTargetDateTimeText: String,
-            clockPendingIntent: PendingIntent,
             appPendingIntent: PendingIntent,
             alignTogglePendingIntent: PendingIntent,
             alignIconRes: Int,
             isCentered: Boolean
         ): RemoteViews {
             return RemoteViews(context.packageName, R.layout.widget_next_up_compact_wide).apply {
-                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_root, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
@@ -104,15 +104,15 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_alarm_section_center, View.VISIBLE)
                     setTextViewText(R.id.widget_countdown_center, countdownText)
                     setTextViewText(R.id.widget_alarm_time_center, shortTargetDateTimeText)
-                    setOnClickPendingIntent(R.id.widget_countdown_center, clockPendingIntent)
-                    setOnClickPendingIntent(R.id.widget_alarm_time_center, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_countdown_center, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_center, appPendingIntent)
                 } else {
                     setViewVisibility(R.id.widget_alarm_section_center, View.GONE)
                     setViewVisibility(R.id.widget_alarm_section_left, View.VISIBLE)
                     setTextViewText(R.id.widget_countdown_left, countdownText)
                     setTextViewText(R.id.widget_alarm_time_left, shortTargetDateTimeText)
-                    setOnClickPendingIntent(R.id.widget_countdown_left, clockPendingIntent)
-                    setOnClickPendingIntent(R.id.widget_alarm_time_left, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_countdown_left, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_left, appPendingIntent)
                 }
             }
         }
@@ -122,7 +122,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
             countdownText: String,
             fullTargetDateTimeText: String,
-            clockPendingIntent: PendingIntent,
             appPendingIntent: PendingIntent,
             alignTogglePendingIntent: PendingIntent,
             alignIconRes: Int,
@@ -130,7 +129,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             groupedRoutineAlarms: List<Pair<GroupedAlarmPattern, Long>>
         ): RemoteViews {
             return RemoteViews(context.packageName, R.layout.widget_next_up_tall).apply {
-                setOnClickPendingIntent(R.id.widget_root, clockPendingIntent)
+                setOnClickPendingIntent(R.id.widget_root, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_header, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_title, appPendingIntent)
                 setOnClickPendingIntent(R.id.widget_icon, appPendingIntent)
@@ -143,8 +142,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_alarm_section_center, View.VISIBLE)
                     setTextViewText(R.id.widget_countdown_center, countdownText)
                     setTextViewText(R.id.widget_alarm_time_center, fullTargetDateTimeText)
-                    setOnClickPendingIntent(R.id.widget_countdown_center, clockPendingIntent)
-                    setOnClickPendingIntent(R.id.widget_alarm_time_center, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_countdown_center, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_center, appPendingIntent)
 
                     setViewVisibility(R.id.widget_section_predicted_left, View.GONE)
                     setViewVisibility(R.id.widget_section_predicted_center, View.VISIBLE)
@@ -156,8 +155,8 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_alarm_section_left, View.VISIBLE)
                     setTextViewText(R.id.widget_countdown_left, countdownText)
                     setTextViewText(R.id.widget_alarm_time_left, fullTargetDateTimeText)
-                    setOnClickPendingIntent(R.id.widget_countdown_left, clockPendingIntent)
-                    setOnClickPendingIntent(R.id.widget_alarm_time_left, clockPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_countdown_left, appPendingIntent)
+                    setOnClickPendingIntent(R.id.widget_alarm_time_left, appPendingIntent)
 
                     setViewVisibility(R.id.widget_section_predicted_center, View.GONE)
                     setViewVisibility(R.id.widget_section_predicted_left, View.VISIBLE)
@@ -205,7 +204,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     }
                     setRemoteAdapter(R.id.widget_alarms_list, serviceIntent)
                 }
-                setPendingIntentTemplate(R.id.widget_alarms_list, clockPendingIntent)
+                setPendingIntentTemplate(R.id.widget_alarms_list, appPendingIntent)
             }
         }
 
@@ -222,23 +221,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val countdownText = AlarmFormatter.formatRemaining(triggerTime)
             val fullTargetDateTimeText = AlarmFormatter.formatTargetDateTime(triggerTime)
             val shortTargetDateTimeText = AlarmFormatter.formatShortTargetDateTime(triggerTime)
-
-            // Main clock tap -> Google Clock
-            val clockPendingIntent = run {
-                val launchIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    setPackage("com.google.android.deskclock")
-                }
-                if (context.packageManager.resolveActivity(launchIntent, 0) == null) {
-                    launchIntent.setPackage(null)
-                }
-                PendingIntent.getActivity(
-                    context,
-                    2001,
-                    launchIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
 
             // App card tap -> NextUp App
             val appIntent = Intent(context, MainActivity::class.java).apply {
@@ -271,7 +253,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             val tinyViews = buildTinyViews(
                 context,
                 countdownText,
-                clockPendingIntent,
                 appPendingIntent
             )
 
@@ -280,7 +261,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 context,
                 countdownText,
                 shortTargetDateTimeText,
-                clockPendingIntent,
                 appPendingIntent,
                 alignTogglePendingIntent,
                 alignIconRes,
@@ -307,7 +287,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 appWidgetId = appWidgetId,
                 countdownText = countdownText,
                 fullTargetDateTimeText = fullTargetDateTimeText,
-                clockPendingIntent = clockPendingIntent,
                 appPendingIntent = appPendingIntent,
                 alignTogglePendingIntent = alignTogglePendingIntent,
                 alignIconRes = alignIconRes,
@@ -351,24 +330,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_alarms_list)
             }
             NextUpLog.d("WidgetProvider", "updateWidget(id=$appWidgetId): updateAppWidget dispatched ($layoutName)")
-
-            // Auto-refresh exactly when the alarm is due to ring
-            if (triggerTime != null && triggerTime > System.currentTimeMillis()) {
-                val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                    action = AlarmBroadcastReceiver.ACTION_REFRESH_WIDGET
-                }
-                val pi = PendingIntent.getBroadcast(
-                    context,
-                    1001,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-                try {
-                    am?.set(AlarmManager.RTC, triggerTime, pi)
-                } catch (ignored: Exception) {
-                }
-            }
         }
     }
 }
