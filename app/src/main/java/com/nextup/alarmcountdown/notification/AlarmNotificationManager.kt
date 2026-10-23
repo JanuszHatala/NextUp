@@ -51,23 +51,7 @@ object AlarmNotificationManager {
 
     fun cancelNotification(context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
-        cancelScheduledUpdate(context)
-    }
-
-    private fun cancelScheduledUpdate(context: Context) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-            action = AlarmBroadcastReceiver.ACTION_REFRESH_NOTIFICATION
-        }
-        val pi = PendingIntent.getBroadcast(
-            context,
-            2002,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        try {
-            am.cancel(pi)
-        } catch (ignored: Exception) {}
+        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
     }
 
     fun updateNotification(context: Context) {
@@ -149,10 +133,20 @@ object AlarmNotificationManager {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
-            .setShowWhen(false)
-            .setUsesChronometer(false)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+
+        if (hasValidAlarm && triggerTime != null) {
+            // Native chronometer countdown: Android SystemUI updates the live countdown
+            // on the display/GPU without waking the app CPU or draining battery!
+            builder.setWhen(triggerTime)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+        } else {
+            builder.setShowWhen(false)
+                .setUsesChronometer(false)
+        }
 
         // 3. Action: Dismiss Alarm (Direct Activity intent to Google Clock HandleApiCalls)
         if (hasValidAlarm && triggerTime != null) {
@@ -196,56 +190,7 @@ object AlarmNotificationManager {
         } catch (ignored: SecurityException) {
         }
 
-        // Smart background scheduling: hourly when > 1h, per-minute when <= 1h, ring transition when passed
-        scheduleSmartNotificationUpdate(appContext, triggerTime)
-    }
-
-    /**
-     * Schedules exact AlarmManager wakeups matching icon and title transition boundaries.
-     * Hourly transitions when > 1h away, per-minute transitions when <= 1h away.
-     */
-    private fun scheduleSmartNotificationUpdate(context: Context, triggerTimeMillis: Long?) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-            action = AlarmBroadcastReceiver.ACTION_REFRESH_NOTIFICATION
-        }
-        val pi = PendingIntent.getBroadcast(
-            context,
-            2002,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val now = System.currentTimeMillis()
-        if (triggerTimeMillis != null && triggerTimeMillis > now) {
-            val remainingMillis = triggerTimeMillis - now
-            val targetTime = when {
-                remainingMillis > 3600_000L -> {
-                    val remainder = remainingMillis % 3600_000L
-                    now + (if (remainder == 0L) 3600_000L else remainder) + 1000L
-                }
-                remainingMillis > 60_000L -> {
-                    val remainder = remainingMillis % 60_000L
-                    now + (if (remainder == 0L) 60_000L else remainder) + 1000L
-                }
-                else -> triggerTimeMillis + 500L
-            }
-
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    am.setExactAndAllowWhileIdle(AlarmManager.RTC, targetTime, pi)
-                } else {
-                    am.set(AlarmManager.RTC, targetTime, pi)
-                }
-            } catch (e: Exception) {
-                try {
-                    am.set(AlarmManager.RTC, targetTime, pi)
-                } catch (ignored: Exception) {}
-            }
-        } else {
-            try {
-                am.cancel(pi)
-            } catch (ignored: Exception) {}
-        }
+        // Centralized refresh scheduling for widgets and notifications
+        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(appContext)
     }
 }

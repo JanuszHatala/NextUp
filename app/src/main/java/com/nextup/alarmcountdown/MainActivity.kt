@@ -154,6 +154,11 @@ class MainActivity : ComponentActivity() {
         com.nextup.alarmcountdown.notification.AlarmNotificationManager.updateNotification(applicationContext)
     }
 
+    override fun onPause() {
+        super.onPause()
+        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(applicationContext)
+    }
+
     private fun pinWidgetToHomeScreen() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val appWidgetManager = AppWidgetManager.getInstance(this)
