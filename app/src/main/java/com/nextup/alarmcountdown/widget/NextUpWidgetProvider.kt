@@ -38,6 +38,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateWidget(appContext, appWidgetManager, appWidgetId)
         }
+        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(appContext)
     }
 
     override fun onAppWidgetOptionsChanged(
