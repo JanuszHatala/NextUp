@@ -74,17 +74,25 @@ class AlarmRefreshSchedulerTest {
     }
 
     @Test
-    fun testScreenOffDoesNotScheduleMinuteWakeups() {
+    fun testRingRefreshCalculatesExactAlarmBoundary() {
         val now = 80442000L
         val alarmTime = now + 7 * 3600_000L // 7 hours later
 
-        val result = AlarmRefreshScheduler.calculateNextRefreshTime(
+        val ringResult = AlarmRefreshScheduler.calculateRingRefreshTime(
             now = now,
             triggerTimeMillis = alarmTime,
-            earliestRoutineMillis = null,
-            isInteractive = false
+            earliestRoutineMillis = null
         )
-        // Only wakes up at the actual alarm time (+ 500ms), NOT the next minute mark!
-        assertEquals(alarmTime + 500L, result)
+        // Exact ring wakeup scheduled for trigger time + 500ms
+        assertEquals(alarmTime + 500L, ringResult)
+
+        // Minute refresh scheduled for next minute (via non-wakeup RTC)
+        val minuteExpected = (now / 60_000L + 1) * 60_000L + 500L
+        val minuteResult = AlarmRefreshScheduler.calculateNextMinuteRefreshTime(
+            now = now,
+            triggerTimeMillis = alarmTime,
+            earliestRoutineMillis = null
+        )
+        assertEquals(minuteExpected, minuteResult)
     }
 }
