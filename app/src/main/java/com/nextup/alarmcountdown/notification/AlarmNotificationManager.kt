@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.PowerManager
 import android.provider.AlarmClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -25,6 +26,19 @@ object AlarmNotificationManager {
 
     const val CHANNEL_ID = "nearest_alarm_channel_v3"
     const val NOTIFICATION_ID = 2001
+
+    @Volatile
+    private var lastPostedTriggerTime: Long? = Long.MIN_VALUE
+    @Volatile
+    private var lastPostedHasValidAlarm: Boolean = false
+    @Volatile
+    private var lastPostedTitle: String? = null
+    @Volatile
+    private var lastPostedContentText: String? = null
+    @Volatile
+    private var lastPostedIconBadgeText: String? = null
+    @Volatile
+    private var lastPostTimestampMillis: Long = 0L
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -50,11 +64,16 @@ object AlarmNotificationManager {
     }
 
     fun cancelNotification(context: Context) {
+        lastPostedTriggerTime = Long.MIN_VALUE
+        lastPostedHasValidAlarm = false
+        lastPostedTitle = null
+        lastPostedContentText = null
+        lastPostedIconBadgeText = null
+        lastPostTimestampMillis = 0L
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
-        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
     }
 
-    fun updateNotification(context: Context) {
+    fun updateNotification(context: Context, force: Boolean = false) {
         val appContext = context.applicationContext
         val prefs = NextUpPreferences.getInstance(appContext)
         prefs.syncFromDisk()
@@ -74,15 +93,40 @@ object AlarmNotificationManager {
             }
         }
 
-        createNotificationChannel(appContext)
-
         val repository = AlarmRepository(appContext)
         val nextAlarm = repository.getNextAlarm()
         val triggerTime = nextAlarm?.triggerTimeMillis
-        val hasValidAlarm = triggerTime != null && triggerTime > System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val hasValidAlarm = triggerTime != null && triggerTime > now
+
+        val pm = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val isInteractive = pm?.isInteractive ?: true
+
+        // Screen-off optimization: When screen is off and the alarm target did not change,
+        // skip calling notify(). Nobody is looking at the screen, and SystemUI's chronometer
+        // runs countdown rendering natively without app CPU intervention.
+        if (!isInteractive && !force && triggerTime == lastPostedTriggerTime && hasValidAlarm == lastPostedHasValidAlarm) {
+            return
+        }
 
         val countdownText = AlarmFormatter.formatRemaining(triggerTime)
         val targetDateTimeText = AlarmFormatter.formatTargetDateTime(triggerTime)
+        val iconBadgeText = StatusIconGenerator.getBadgeText(triggerTime, prefs.isStatusBarInfoEnabled)
+        val contentText = if (hasValidAlarm) targetDateTimeText else "Tap to configure or set alarms"
+        val title = if (hasValidAlarm) "Next Alarm in $countdownText" else "No active alarm"
+
+        // Deduplication & rapid debounce: Skip if content is identical or within 500ms of last post for same alarm
+        if (!force &&
+            hasValidAlarm == lastPostedHasValidAlarm &&
+            triggerTime == lastPostedTriggerTime &&
+            iconBadgeText == lastPostedIconBadgeText &&
+            contentText == lastPostedContentText &&
+            (title == lastPostedTitle || (now - lastPostTimestampMillis < 500L))
+        ) {
+            return
+        }
+
+        createNotificationChannel(appContext)
 
         // 1. Content Intent -> Open NextUp App
         val appIntent = Intent(appContext, MainActivity::class.java).apply {
@@ -112,18 +156,6 @@ object AlarmNotificationManager {
             triggerTime,
             prefs.isStatusBarInfoEnabled
         )
-
-        val title = if (hasValidAlarm) {
-            "Next Alarm in $countdownText"
-        } else {
-            "No active alarm"
-        }
-
-        val contentText = if (hasValidAlarm) {
-            targetDateTimeText
-        } else {
-            "Tap to configure or set alarms"
-        }
 
         val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(statusIcon)
@@ -187,10 +219,13 @@ object AlarmNotificationManager {
 
         try {
             NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, builder.build())
+            lastPostedTriggerTime = triggerTime
+            lastPostedHasValidAlarm = hasValidAlarm
+            lastPostedTitle = title
+            lastPostedContentText = contentText
+            lastPostedIconBadgeText = iconBadgeText
+            lastPostTimestampMillis = now
         } catch (ignored: SecurityException) {
         }
-
-        // Centralized refresh scheduling for widgets and notifications
-        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(appContext)
     }
 }

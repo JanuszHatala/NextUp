@@ -74,6 +74,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     } finally {
                         AlarmNotificationManager.updateNotification(context)
                         NextUpWidgetProvider.updateAllWidgets(context)
+                        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
                         pendingResult.finish()
                     }
                 }

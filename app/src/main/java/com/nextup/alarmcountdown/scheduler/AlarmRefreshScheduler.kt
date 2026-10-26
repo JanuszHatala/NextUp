@@ -16,6 +16,11 @@ object AlarmRefreshScheduler {
     const val REFRESH_REQUEST_CODE = 2002
     const val RING_REQUEST_CODE = 2003
 
+    @Volatile
+    private var lastScheduledMinuteTarget: Long? = null
+    @Volatile
+    private var lastScheduledRingTarget: Long? = null
+
     /**
      * Calculates the next minute boundary for widget countdown refreshes.
      * When targetTime is within the current minute, schedules right after targetTime (+ 500ms).
@@ -104,6 +109,13 @@ object AlarmRefreshScheduler {
             null
         }
 
+        val minuteTargetTime = calculateNextMinuteRefreshTime(now, triggerTime, earliestRoutine)
+        val ringTargetTime = calculateRingRefreshTime(now, triggerTime, earliestRoutine)
+
+        if (minuteTargetTime == lastScheduledMinuteTarget && ringTargetTime == lastScheduledRingTarget) {
+            return
+        }
+
         // 1. Minute countdown refresh (non-wakeup RTC)
         val refreshIntent = Intent(appContext, AlarmBroadcastReceiver::class.java).apply {
             action = AlarmBroadcastReceiver.ACTION_REFRESH_WIDGET
@@ -115,30 +127,32 @@ object AlarmRefreshScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val minuteTargetTime = calculateNextMinuteRefreshTime(now, triggerTime, earliestRoutine)
-        if (minuteTargetTime != null && minuteTargetTime > now) {
-            NextUpLog.d(
-                "RefreshScheduler",
-                "scheduleMinuteRefresh (RTC non-wakeup): in ${(minuteTargetTime - now) / 1000}s (targetTime=$minuteTargetTime, now=$now)"
-            )
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    am.setExact(AlarmManager.RTC, minuteTargetTime, refreshPi)
-                } else {
-                    am.set(AlarmManager.RTC, minuteTargetTime, refreshPi)
-                }
-            } catch (e: SecurityException) {
-                NextUpLog.w("RefreshScheduler", "Exact RTC alarm not allowed, fallback to set()", e)
+        if (minuteTargetTime != lastScheduledMinuteTarget) {
+            lastScheduledMinuteTarget = minuteTargetTime
+            if (minuteTargetTime != null && minuteTargetTime > now) {
+                NextUpLog.d(
+                    "RefreshScheduler",
+                    "scheduleMinuteRefresh (RTC non-wakeup): in ${(minuteTargetTime - now) / 1000}s (targetTime=$minuteTargetTime, now=$now)"
+                )
                 try {
-                    am.set(AlarmManager.RTC, minuteTargetTime, refreshPi)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        am.setExact(AlarmManager.RTC, minuteTargetTime, refreshPi)
+                    } else {
+                        am.set(AlarmManager.RTC, minuteTargetTime, refreshPi)
+                    }
+                } catch (e: SecurityException) {
+                    NextUpLog.w("RefreshScheduler", "Exact RTC alarm not allowed, fallback to set()", e)
+                    try {
+                        am.set(AlarmManager.RTC, minuteTargetTime, refreshPi)
+                    } catch (ignored: Exception) {}
+                } catch (e: Exception) {
+                    NextUpLog.e("RefreshScheduler", "Failed to schedule minute refresh alarm", e)
+                }
+            } else {
+                try {
+                    am.cancel(refreshPi)
                 } catch (ignored: Exception) {}
-            } catch (e: Exception) {
-                NextUpLog.e("RefreshScheduler", "Failed to schedule minute refresh alarm", e)
             }
-        } else {
-            try {
-                am.cancel(refreshPi)
-            } catch (ignored: Exception) {}
         }
 
         // 2. Exact ring-time wakeup alarm (RTC_WAKEUP)
@@ -152,30 +166,32 @@ object AlarmRefreshScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val ringTargetTime = calculateRingRefreshTime(now, triggerTime, earliestRoutine)
-        if (ringTargetTime != null && ringTargetTime > now) {
-            NextUpLog.d(
-                "RefreshScheduler",
-                "scheduleRingRefresh (RTC_WAKEUP): in ${(ringTargetTime - now) / 1000}s (ringTargetTime=$ringTargetTime, now=$now)"
-            )
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
-                } else {
-                    am.setExact(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
-                }
-            } catch (e: SecurityException) {
-                NextUpLog.w("RefreshScheduler", "Exact ring wakeup not allowed, fallback to set()", e)
+        if (ringTargetTime != lastScheduledRingTarget) {
+            lastScheduledRingTarget = ringTargetTime
+            if (ringTargetTime != null && ringTargetTime > now) {
+                NextUpLog.d(
+                    "RefreshScheduler",
+                    "scheduleRingRefresh (RTC_WAKEUP): in ${(ringTargetTime - now) / 1000}s (ringTargetTime=$ringTargetTime, now=$now)"
+                )
                 try {
-                    am.set(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
+                    } else {
+                        am.setExact(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
+                    }
+                } catch (e: SecurityException) {
+                    NextUpLog.w("RefreshScheduler", "Exact ring wakeup not allowed, fallback to set()", e)
+                    try {
+                        am.set(AlarmManager.RTC_WAKEUP, ringTargetTime, ringPi)
+                    } catch (ignored: Exception) {}
+                } catch (e: Exception) {
+                    NextUpLog.e("RefreshScheduler", "Failed to schedule ring refresh alarm", e)
+                }
+            } else {
+                try {
+                    am.cancel(ringPi)
                 } catch (ignored: Exception) {}
-            } catch (e: Exception) {
-                NextUpLog.e("RefreshScheduler", "Failed to schedule ring refresh alarm", e)
             }
-        } else {
-            try {
-                am.cancel(ringPi)
-            } catch (ignored: Exception) {}
         }
     }
 }
