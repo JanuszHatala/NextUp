@@ -18,19 +18,23 @@ class NextUpApplication : Application() {
         val systemFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_USER_PRESENT)
-            addAction(android.app.AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
-            addAction(Intent.ACTION_TIME_CHANGED)
-            addAction(Intent.ACTION_TIMEZONE_CHANGED)
-            addAction(Intent.ACTION_DATE_CHANGED)
         }
         val dynamicReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 NextUpLog.d("App", "Dynamic system event: ${intent.action}")
-                com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context).syncFromDisk()
-                AlarmNotificationManager.updateNotification(context)
-                NextUpWidgetProvider.updateAllWidgets(context)
-                com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_ON -> {
+                        com.nextup.alarmcountdown.data.NextUpPreferences.getInstance(context).syncFromDisk()
+                        AlarmNotificationManager.updateNotification(context)
+                        NextUpWidgetProvider.updateAllWidgets(context)
+                        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
+                    }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        // When screen turns off, skip UI re-renders and notification posts.
+                        // Only ensure the scheduler maintains the non-wakeup RTC minute refresh.
+                        com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
+                    }
+                }
             }
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {

@@ -13,35 +13,55 @@ import com.nextup.alarmcountdown.util.AlarmFormatter
 
 object StatusIconGenerator {
 
+    @Volatile
+    private var lastBadgeText: String? = null
+    @Volatile
+    private var cachedIcon: IconCompat? = null
+
+    /**
+     * Returns the badge text string (e.g. "2h", "45m", "1d") if status bar info is enabled and valid,
+     * or null if the default icon should be used.
+     */
+    fun getBadgeText(triggerTimeMillis: Long?, showStatusBarInfo: Boolean): String? {
+        if (!showStatusBarInfo || triggerTimeMillis == null || triggerTimeMillis <= 0L) {
+            return null
+        }
+        val remainingMillis = triggerTimeMillis - System.currentTimeMillis()
+        if (remainingMillis <= 0L) {
+            return null
+        }
+        val totalMinutes = remainingMillis / 60_000L
+        return when {
+            totalMinutes < 60 -> "${totalMinutes.coerceAtLeast(1)}m"
+            totalMinutes < 24 * 60 -> "${totalMinutes / 60}h"
+            else -> "${totalMinutes / (24 * 60)}d"
+        }
+    }
+
     /**
      * Generates a status bar icon.
      * If showStatusBarInfo is true, generates a clean compact badge with the remaining hours or minutes (e.g. "2h", "45m", "1d").
      * If false or not applicable, returns the standard alarm bell icon.
+     * Caches the created IconCompat for identical badge text to prevent gratuitous bitmap allocations.
      */
     fun createStatusIcon(
         context: Context,
         triggerTimeMillis: Long?,
         showStatusBarInfo: Boolean
     ): IconCompat {
-        if (!showStatusBarInfo || triggerTimeMillis == null || triggerTimeMillis <= 0L) {
-            return IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
-        }
+        val textToDraw = getBadgeText(triggerTimeMillis, showStatusBarInfo)
+            ?: return IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
 
-        val remainingMillis = triggerTimeMillis - System.currentTimeMillis()
-        if (remainingMillis <= 0L) {
-            return IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
-        }
-
-        val totalMinutes = remainingMillis / 60_000L
-        val textToDraw: String = when {
-            totalMinutes < 60 -> "${totalMinutes.coerceAtLeast(1)}m"
-            totalMinutes < 24 * 60 -> "${totalMinutes / 60}h"
-            else -> "${totalMinutes / (24 * 60)}d"
+        if (textToDraw == lastBadgeText && cachedIcon != null) {
+            return cachedIcon!!
         }
 
         return try {
             val bitmap = createBadgeBitmap(textToDraw)
-            IconCompat.createWithBitmap(bitmap)
+            val icon = IconCompat.createWithBitmap(bitmap)
+            lastBadgeText = textToDraw
+            cachedIcon = icon
+            icon
         } catch (e: Exception) {
             IconCompat.createWithResource(context, R.drawable.ic_stat_alarm)
         }

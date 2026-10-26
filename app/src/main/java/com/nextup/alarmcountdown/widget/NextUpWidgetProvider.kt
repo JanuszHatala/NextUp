@@ -66,7 +66,6 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                     updateWidget(appContext, appWidgetManager, widgetId)
                 }
             }
-            com.nextup.alarmcountdown.scheduler.AlarmRefreshScheduler.scheduleNextRefresh(context)
         }
 
         private fun buildTinyViews(
