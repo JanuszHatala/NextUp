@@ -36,8 +36,8 @@
 - **Decision:** Compute `Earliest Avg` using each calendar day's earliest `CONFIRMED_SEEN` alarm (split Weekday/Weekend), pair it with Day-of-Week bar and Time-of-Day window distributions, and draw charts using pure Compose `Canvas` + `Box` primitives in `StatsScreen.kt`.
 - **Consequences:** Accurate wake-up insights with zero extra Gradle dependencies and full Material 3 Dynamic Color theming.
 
-## ADR-007: Modular Repository Knowledge Base (`docs/kb/`) + Global `project-kb` Skill
+## ADR-007: Modular Repository Knowledge Base (`docs/kb/`) + Global `jh-project-kb` Skill
 - **Status:** Accepted (v1.5.0)
 - **Context:** Feature backlog items and architectural context scattered across past Antigravity conversation transcripts became hard to locate over time.
-- **Decision:** Maintain modular `docs/kb/` (`INDEX.md`, `FEATURES.md`, `BACKLOG.md`, `DECISIONS.md`, `CHANGELOG.md`) enforced by `.agents/rules/knowledge-base.md` and supported by a reusable global skill (`~/.gemini/config/skills/project-kb/`).
+- **Decision:** Maintain modular `docs/kb/` (`INDEX.md`, `FEATURES.md`, `BACKLOG.md`, `DECISIONS.md`, `CHANGELOG.md`) enforced by `.agents/rules/knowledge-base.md` and supported by a reusable global skill (`~/.gemini/config/skills/jh-project-kb/`).
 - **Consequences:** Every PR keeps engineering context, postponed work, and ADRs discoverable inside version control.
