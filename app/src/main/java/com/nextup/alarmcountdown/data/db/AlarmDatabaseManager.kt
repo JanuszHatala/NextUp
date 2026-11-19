@@ -198,13 +198,14 @@ class AlarmDatabaseManager(context: Context) {
         )
 
         for ((periodType, periodKey) in periods) {
-            computeAndUpsertStatsForPeriod(db, periodType, periodKey, dayCategory = "ALL")
-            computeAndUpsertStatsForPeriod(db, periodType, periodKey, dayCategory = if (event.isWeekend) "WEEKEND" else "WEEKDAY")
+            computeAndUpsertStatsForPeriod(db, event, periodType, periodKey, dayCategory = "ALL")
+            computeAndUpsertStatsForPeriod(db, event, periodType, periodKey, dayCategory = if (event.isWeekend) "WEEKEND" else "WEEKDAY")
         }
     }
 
     private fun computeAndUpsertStatsForPeriod(
         db: android.database.sqlite.SQLiteDatabase,
+        event: AlarmEvent,
         periodType: String,
         periodKey: String,
         dayCategory: String
@@ -215,11 +216,37 @@ class AlarmDatabaseManager(context: Context) {
         val args = mutableListOf<String>()
 
         when (periodType) {
+            "WEEKLY" -> {
+                val weekCal = Calendar.getInstance().apply {
+                    timeInMillis = event.scheduledEpochMillis
+                    set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val weekStart = weekCal.timeInMillis
+                weekCal.add(Calendar.DAY_OF_YEAR, 7)
+                val weekEnd = weekCal.timeInMillis
+                whereClause.append(" AND ${NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH} >= ? AND ${NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH} < ?")
+                args.add(weekStart.toString())
+                args.add(weekEnd.toString())
+            }
             "MONTHLY" -> {
                 val parts = periodKey.split("-")
                 whereClause.append(" AND year = ? AND month = ?")
                 args.add(parts[0])
                 args.add(parts[1].toInt().toString())
+            }
+            "QUARTERLY" -> {
+                val parts = periodKey.split("-Q")
+                val quarter = parts[1].toInt()
+                val startMonth = (quarter - 1) * 3 + 1
+                val endMonth = startMonth + 2
+                whereClause.append(" AND year = ? AND month >= ? AND month <= ?")
+                args.add(parts[0])
+                args.add(startMonth.toString())
+                args.add(endMonth.toString())
             }
             "SEASONAL" -> {
                 val parts = periodKey.split("-")
@@ -241,9 +268,9 @@ class AlarmDatabaseManager(context: Context) {
         val sql = """
             SELECT 
                 COUNT(*) as total_count,
-                AVG(alarm_hour * 60 + alarm_minute) as avg_wake,
-                MIN(alarm_hour * 60 + alarm_minute) as min_wake,
-                MAX(alarm_hour * 60 + alarm_minute) as max_wake,
+                COALESCE(AVG(CASE WHEN event_type = 'CONFIRMED_SEEN' THEN alarm_hour * 60 + alarm_minute END), 0.0) as avg_wake,
+                COALESCE(MIN(CASE WHEN event_type = 'CONFIRMED_SEEN' THEN alarm_hour * 60 + alarm_minute END), 0) as min_wake,
+                COALESCE(MAX(CASE WHEN event_type = 'CONFIRMED_SEEN' THEN alarm_hour * 60 + alarm_minute END), 0) as max_wake,
                 SUM(CASE WHEN event_type = 'CONFIRMED_SEEN' THEN 1 ELSE 0 END) as confirmed_cnt,
                 SUM(CASE WHEN event_type = 'MISSED_OR_DEACTIVATED' THEN 1 ELSE 0 END) as missed_cnt
             FROM ${NextUpDatabaseHelper.TABLE_ALARM_EVENTS}
@@ -401,6 +428,51 @@ class AlarmDatabaseManager(context: Context) {
     }
 
     /**
+     * Deletes inactive one-off patterns (groups with 0 active days and <= 1 confirmed count)
+     * while preserving historical alarm_events for statistics.
+     */
+    suspend fun deleteInactiveOneOffPatterns(): Int = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val whereClause = """
+            ${NextUpDatabaseHelper.COL_PATTERN_IS_ACTIVE} = 0
+            AND (${NextUpDatabaseHelper.COL_PATTERN_HOUR} * 60 + ${NextUpDatabaseHelper.COL_PATTERN_MINUTE}) IN (
+                SELECT (${NextUpDatabaseHelper.COL_PATTERN_HOUR} * 60 + ${NextUpDatabaseHelper.COL_PATTERN_MINUTE})
+                FROM ${NextUpDatabaseHelper.TABLE_ALARM_PATTERNS}
+                GROUP BY ${NextUpDatabaseHelper.COL_PATTERN_HOUR}, ${NextUpDatabaseHelper.COL_PATTERN_MINUTE}
+                HAVING SUM(${NextUpDatabaseHelper.COL_PATTERN_IS_ACTIVE}) = 0
+                   AND SUM(${NextUpDatabaseHelper.COL_PATTERN_CONFIRMED_COUNT}) <= 1
+            )
+        """.trimIndent()
+        db.delete(NextUpDatabaseHelper.TABLE_ALARM_PATTERNS, whereClause, null)
+    }
+
+    /**
+     * Retrieves recorded alarm events ordered chronologically (newest first).
+     */
+    suspend fun getAlarmEvents(sinceEpochMillis: Long? = null, limit: Int = 500): List<AlarmEvent> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<AlarmEvent>()
+        val db = dbHelper.readableDatabase
+        val selection = sinceEpochMillis?.let { "${NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH} >= ?" }
+        val selectionArgs = sinceEpochMillis?.let { arrayOf(it.toString()) }
+        val cursor = db.query(
+            NextUpDatabaseHelper.TABLE_ALARM_EVENTS,
+            null,
+            selection,
+            selectionArgs,
+            null,
+            null,
+            "${NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH} DESC, ${NextUpDatabaseHelper.COL_EVENT_ID} DESC",
+            limit.toString()
+        )
+        cursor.use {
+            while (it.moveToNext()) {
+                list.add(cursorToEvent(it))
+            }
+        }
+        list
+    }
+
+    /**
      * Query pre-aggregated statistics for a specific period type and key.
      */
     suspend fun getRoutineStats(periodType: String, periodKey: String): List<RoutineStatistics> = withContext(Dispatchers.IO) {
@@ -491,6 +563,23 @@ class AlarmDatabaseManager(context: Context) {
         return cursor.use {
             if (it.moveToFirst()) it.getInt(0) else 0
         }
+    }
+
+    private fun cursorToEvent(cursor: Cursor): AlarmEvent {
+        return AlarmEvent(
+            id = cursor.getLong(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_ID)),
+            alarmHour = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_HOUR)),
+            alarmMinute = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_MINUTE)),
+            scheduledEpochMillis = cursor.getLong(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_SCHEDULED_EPOCH)),
+            eventType = cursor.getString(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_TYPE)),
+            recordedEpochMillis = cursor.getLong(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_RECORDED_EPOCH)),
+            dayOfWeek = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_DAY_OF_WEEK)),
+            dayOfMonth = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_DAY_OF_MONTH)),
+            month = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_MONTH)),
+            year = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_YEAR)),
+            season = cursor.getString(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_SEASON)),
+            isWeekend = cursor.getInt(cursor.getColumnIndexOrThrow(NextUpDatabaseHelper.COL_EVENT_IS_WEEKEND)) == 1
+        )
     }
 
     private fun cursorToPattern(cursor: Cursor): AlarmPattern {

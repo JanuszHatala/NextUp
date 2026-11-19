@@ -2,9 +2,11 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Android](https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%E2%80%9336)-green.svg)](https://developer.android.com)
-[![Version](https://img.shields.io/badge/Version-1.1.0-orange.svg)](https://github.com/JanuszHatala/NextUp)
+[![Version](https://img.shields.io/badge/Version-1.5.0-orange.svg)](https://github.com/JanuszHatala/NextUp)
 
 A lightweight, zero-battery-drain Android application and fully responsive home screen widget that tracks and counts down to your upcoming alarms, while passively learning your full weekly alarm routine.
+
+> **Engineering Knowledge Base:** See [docs/kb/INDEX.md](docs/kb/INDEX.md) for feature specs, architectural decisions, backlog, and changelog.
 
 ---
 

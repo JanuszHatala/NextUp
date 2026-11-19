@@ -186,4 +186,48 @@ class GroupedAlarmPatternTest {
         assertEquals(5, sorted[2].first.hour)
         assertEquals(0, sorted[2].first.minute)
     }
+
+    @Test
+    fun testInactiveMetadataAndNoDuplicationWhenReactivated() {
+        val oneOff = AlarmPattern(
+            patternId = "P_4_0330",
+            hour = 3,
+            minute = 30,
+            dayOfWeek = Calendar.WEDNESDAY,
+            isActive = false,
+            lastSeenMillis = 1_500L,
+            confirmedCount = 1
+        )
+        val multiDayInactive = listOf(
+            AlarmPattern("P_2_0600", 6, 0, Calendar.MONDAY, isActive = false, lastSeenMillis = 2_000L, confirmedCount = 4),
+            AlarmPattern("P_3_0600", 6, 0, Calendar.TUESDAY, isActive = false, lastSeenMillis = 5_000L, confirmedCount = 3)
+        )
+
+        val grouped = GroupedAlarmPattern.fromPatterns(listOf(oneOff) + multiDayInactive)
+        assertEquals(2, grouped.size)
+
+        val oneOffGroup = grouped.first { it.hour == 3 && it.minute == 30 }
+        assertTrue(oneOffGroup.isOneOff)
+        assertEquals(1, oneOffGroup.totalConfirmedCount)
+        assertEquals(1_500L, oneOffGroup.lastSeenMillis)
+        assertEquals("Wed", oneOffGroup.historicalDaysLabel)
+
+        val multiGroup = grouped.first { it.hour == 6 && it.minute == 0 }
+        assertTrue(!multiGroup.isOneOff)
+        assertEquals(7, multiGroup.totalConfirmedCount)
+        assertEquals(5_000L, multiGroup.lastSeenMillis)
+        assertEquals("Mon, Tue", multiGroup.historicalDaysLabel)
+
+        // Setting 03:30 on Friday reactivates/groups under the single 03:30 entry without duplication
+        val reactivated = listOf(
+            oneOff,
+            AlarmPattern("P_6_0330", 3, 30, Calendar.FRIDAY, isActive = true, lastSeenMillis = 9_000L, confirmedCount = 1)
+        )
+        val merged = GroupedAlarmPattern.fromPatterns(reactivated)
+        assertEquals(1, merged.size)
+        assertTrue(merged[0].isActive)
+        assertTrue(!merged[0].isOneOff)
+        assertEquals("Fri", merged[0].daysLabel)
+        assertEquals("Wed, Fri", merged[0].historicalDaysLabel)
+    }
 }

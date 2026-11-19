@@ -16,4 +16,7 @@
     <string name="widget_alignment_desc">Choose whether text in the home screen widget is left-aligned or centered.</string>
     <string name="widget_alignment_left">Left Aligned</string>
     <string name="widget_alignment_center">Centered</string>
+    <string name="nav_schedule">Schedule</string>
+    <string name="nav_history">History</string>
+    <string name="nav_stats">Stats</string>
 </resources>
