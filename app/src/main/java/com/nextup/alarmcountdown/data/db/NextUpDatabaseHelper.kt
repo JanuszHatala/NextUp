@@ -13,7 +13,7 @@ class NextUpDatabaseHelper(context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "nextup_alarms.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         @Volatile
         private var instance: NextUpDatabaseHelper? = null
@@ -90,6 +90,7 @@ class NextUpDatabaseHelper(context: Context) : SQLiteOpenHelper(
         )
         db.execSQL("CREATE INDEX idx_events_date ON $TABLE_ALARM_EVENTS($COL_EVENT_YEAR, $COL_EVENT_MONTH, $COL_EVENT_SEASON);")
         db.execSQL("CREATE INDEX idx_events_time ON $TABLE_ALARM_EVENTS($COL_EVENT_DAY_OF_WEEK, $COL_EVENT_HOUR, $COL_EVENT_MINUTE);")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_events_scheduled ON $TABLE_ALARM_EVENTS($COL_EVENT_SCHEDULED_EPOCH DESC);")
 
         // Create alarm_patterns
         db.execSQL(
@@ -132,6 +133,8 @@ class NextUpDatabaseHelper(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Future database migrations
+        if (oldVersion < 2) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_events_scheduled ON $TABLE_ALARM_EVENTS($COL_EVENT_SCHEDULED_EPOCH DESC);")
+        }
     }
 }

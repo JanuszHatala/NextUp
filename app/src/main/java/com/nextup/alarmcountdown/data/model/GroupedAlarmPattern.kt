@@ -14,6 +14,21 @@ data class GroupedAlarmPattern(
     val isActive: Boolean
         get() = activeDays.isNotEmpty()
 
+    val lastSeenMillis: Long
+        get() = allPatterns.maxOfOrNull { it.lastSeenMillis } ?: 0L
+
+    val totalConfirmedCount: Int
+        get() = allPatterns.sumOf { it.confirmedCount }
+
+    val historicalDays: Set<Int>
+        get() = allPatterns.map { it.dayOfWeek }.toSet()
+
+    val historicalDaysLabel: String
+        get() = formatDaysSet(historicalDays)
+
+    val isOneOff: Boolean
+        get() = !isActive && totalConfirmedCount <= 1
+
     /**
      * Formats the active days:
      * - "Every day" if all 7 days are active (Mon-Sun)
@@ -22,37 +37,39 @@ data class GroupedAlarmPattern(
      * - Comma-separated abbreviated days (e.g. "Thu, Fri", "Mon, Wed, Fri") ordered Monday -> Sunday.
      */
     val daysLabel: String
-        get() {
-            if (activeDays.isEmpty()) return "None"
-            val weekdays = setOf(
-                Calendar.MONDAY,
-                Calendar.TUESDAY,
-                Calendar.WEDNESDAY,
-                Calendar.THURSDAY,
-                Calendar.FRIDAY
-            )
-            val weekend = setOf(Calendar.SATURDAY, Calendar.SUNDAY)
-            val allDays = weekdays + weekend
+        get() = formatDaysSet(activeDays)
 
-            return when (activeDays) {
-                allDays -> "Every day"
-                weekdays -> "Weekdays"
-                weekend -> "Weekend"
-                else -> {
-                    val orderedDays = listOf(
-                        Calendar.MONDAY,
-                        Calendar.TUESDAY,
-                        Calendar.WEDNESDAY,
-                        Calendar.THURSDAY,
-                        Calendar.FRIDAY,
-                        Calendar.SATURDAY,
-                        Calendar.SUNDAY
-                    )
-                    orderedDays.filter { it in activeDays }
-                        .joinToString(", ") { dayOfWeekToShortName(it) }
-                }
+    private fun formatDaysSet(days: Set<Int>): String {
+        if (days.isEmpty()) return "None"
+        val weekdays = setOf(
+            Calendar.MONDAY,
+            Calendar.TUESDAY,
+            Calendar.WEDNESDAY,
+            Calendar.THURSDAY,
+            Calendar.FRIDAY
+        )
+        val weekend = setOf(Calendar.SATURDAY, Calendar.SUNDAY)
+        val allDays = weekdays + weekend
+
+        return when (days) {
+            allDays -> "Every day"
+            weekdays -> "Weekdays"
+            weekend -> "Weekend"
+            else -> {
+                val orderedDays = listOf(
+                    Calendar.MONDAY,
+                    Calendar.TUESDAY,
+                    Calendar.WEDNESDAY,
+                    Calendar.THURSDAY,
+                    Calendar.FRIDAY,
+                    Calendar.SATURDAY,
+                    Calendar.SUNDAY
+                )
+                orderedDays.filter { it in days }
+                    .joinToString(", ") { dayOfWeekToShortName(it) }
             }
         }
+    }
 
     /**
      * Calculates the nearest upcoming occurrence timestamp among active days, starting from [fromMillis].

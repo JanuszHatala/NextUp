@@ -40,6 +40,10 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -84,9 +88,13 @@ import com.nextup.alarmcountdown.data.AlarmModel
 import com.nextup.alarmcountdown.data.AlarmRepository
 import com.nextup.alarmcountdown.data.NextUpPreferences
 import com.nextup.alarmcountdown.data.db.AlarmDatabaseManager
+import com.nextup.alarmcountdown.data.model.AlarmEvent
 import com.nextup.alarmcountdown.data.model.AlarmPattern
 import com.nextup.alarmcountdown.data.model.GroupedAlarmPattern
 import com.nextup.alarmcountdown.notification.AlarmNotificationManager
+import com.nextup.alarmcountdown.ui.screens.HistoryScreen
+import com.nextup.alarmcountdown.ui.screens.HistorySubTab
+import com.nextup.alarmcountdown.ui.screens.StatsScreen
 import com.nextup.alarmcountdown.ui.theme.NextUpTheme
 import com.nextup.alarmcountdown.util.AlarmFormatter
 import com.nextup.alarmcountdown.widget.NextUpWidgetProvider
@@ -96,9 +104,10 @@ import java.util.Calendar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class AppScreen {
-    MAIN,
-    SETTINGS
+enum class MainTab {
+    SCHEDULE,
+    HISTORY,
+    STATS
 }
 
 class MainActivity : ComponentActivity() {
@@ -116,32 +125,39 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NextUpTheme {
-                var currentScreen by rememberSaveable { mutableStateOf(AppScreen.MAIN) }
+                var showSettings by rememberSaveable { mutableStateOf(false) }
+                var selectedTab by rememberSaveable { mutableStateOf(MainTab.SCHEDULE) }
+                var historySubTab by rememberSaveable { mutableStateOf(HistorySubTab.INACTIVE) }
 
-                BackHandler(enabled = currentScreen != AppScreen.MAIN) {
-                    currentScreen = AppScreen.MAIN
+                BackHandler(enabled = showSettings || selectedTab != MainTab.SCHEDULE) {
+                    if (showSettings) {
+                        showSettings = false
+                    } else {
+                        selectedTab = MainTab.SCHEDULE
+                    }
                 }
 
-                when (currentScreen) {
-                    AppScreen.MAIN -> {
-                        MainScreen(
-                            repository = repository,
-                            dbManager = dbManager,
-                            prefs = prefs,
-                            onOpenClock = { openClockApp(repository.getNextAlarm()) },
-                            onSetAlarm = { openSetAlarmScreen() },
-                            onSetGroupedPatternInClock = { group -> setGroupedPatternInClock(group) },
-                            onOpenSettings = { currentScreen = AppScreen.SETTINGS }
-                        )
-                    }
-                    AppScreen.SETTINGS -> {
-                        SettingsScreen(
-                            prefs = prefs,
-                            dbManager = dbManager,
-                            onBackClick = { currentScreen = AppScreen.MAIN },
-                            onPinWidget = { pinWidgetToHomeScreen() }
-                        )
-                    }
+                if (showSettings) {
+                    SettingsScreen(
+                        prefs = prefs,
+                        dbManager = dbManager,
+                        onBackClick = { showSettings = false },
+                        onPinWidget = { pinWidgetToHomeScreen() }
+                    )
+                } else {
+                    MainScreen(
+                        repository = repository,
+                        dbManager = dbManager,
+                        prefs = prefs,
+                        selectedTab = selectedTab,
+                        onSelectTab = { selectedTab = it },
+                        historySubTab = historySubTab,
+                        onSelectHistorySubTab = { historySubTab = it },
+                        onOpenClock = { openClockApp(repository.getNextAlarm()) },
+                        onSetAlarm = { openSetAlarmScreen() },
+                        onSetGroupedPatternInClock = { group -> setGroupedPatternInClock(group) },
+                        onOpenSettings = { showSettings = true }
+                    )
                 }
             }
         }
@@ -292,6 +308,10 @@ fun MainScreen(
     repository: AlarmRepository,
     dbManager: AlarmDatabaseManager,
     prefs: NextUpPreferences,
+    selectedTab: MainTab,
+    onSelectTab: (MainTab) -> Unit,
+    historySubTab: HistorySubTab,
+    onSelectHistorySubTab: (HistorySubTab) -> Unit,
     onOpenClock: () -> Unit,
     onSetAlarm: () -> Unit,
     onSetGroupedPatternInClock: (GroupedAlarmPattern) -> Unit,
@@ -304,6 +324,7 @@ fun MainScreen(
     val learningDayNumber by prefs.learningDayNumberFlow.collectAsStateWithLifecycle()
 
     var learnedPatterns by remember { mutableStateOf<List<AlarmPattern>>(emptyList()) }
+    var alarmEvents by remember { mutableStateOf<List<AlarmEvent>>(emptyList()) }
 
     fun refreshPatterns() {
         coroutineScope.launch {
@@ -311,8 +332,28 @@ fun MainScreen(
         }
     }
 
+    fun refreshEvents() {
+        coroutineScope.launch {
+            alarmEvents = dbManager.getAlarmEvents()
+        }
+    }
+
     LaunchedEffect(Unit) {
         refreshPatterns()
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == MainTab.HISTORY || selectedTab == MainTab.STATS) {
+            refreshEvents()
+        }
+    }
+
+    LifecycleResumeEffect(Unit) {
+        refreshPatterns()
+        if (selectedTab == MainTab.HISTORY || selectedTab == MainTab.STATS) {
+            refreshEvents()
+        }
+        onPauseOrDispose { }
     }
 
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -333,6 +374,30 @@ fun MainScreen(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val appContext = context.applicationContext
+
+    val toggleDayAction: (Int, Int, Int, Boolean) -> Unit = { hour, minute, dayOfWeek, active ->
+        coroutineScope.launch {
+            dbManager.upsertPattern(dayOfWeek, hour, minute, active)
+            refreshPatterns()
+            NextUpWidgetProvider.updateAllWidgets(appContext)
+        }
+    }
+    val toggleAllAction: (Int, Int, Boolean) -> Unit = { hour, minute, active ->
+        coroutineScope.launch {
+            dbManager.toggleAllPatternsForTime(hour, minute, active)
+            refreshPatterns()
+            NextUpWidgetProvider.updateAllWidgets(appContext)
+        }
+    }
+    val deleteGroupAction: (Int, Int) -> Unit = { hour, minute ->
+        coroutineScope.launch {
+            dbManager.deleteAllPatternsForTime(hour, minute)
+            refreshPatterns()
+            NextUpWidgetProvider.updateAllWidgets(appContext)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -376,165 +441,266 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        }
-    ) { innerPadding ->
-        if (isLandscape) {
-            // Horizontal Landscape: 2-Column layout
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Left Column: Nearest Alarm hero card + Action buttons
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    NearestAlarmCard(
-                        countdownText = countdownText,
-                        targetDateTimeText = targetDateTimeText,
-                        hasAlarm = hasAlarm
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    ActionButtons(
-                        onOpenClock = onOpenClock,
-                        onSetAlarm = onSetAlarm
-                    )
-                }
-
-                // Right Column: Weekly Schedule & Predictions
-                Column(
-                    modifier = Modifier
-                        .weight(1.2f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (isLearningPeriod) {
-                        LearningPeriodBanner(
-                            dayNumber = learningDayNumber,
-                            onStopLearning = {
-                                prefs.stopLearningPeriod()
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Learning stopped. Current routine saved as reference.",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                    }
-
-                    WeeklyScheduleSection(
-                        learnedPatterns = learnedPatterns,
-                        nowMillis = nowMillis,
-                        nextAlarm = nextAlarm,
-                        onOpenClock = onOpenClock,
-                        onSetGroupedPatternInClock = onSetGroupedPatternInClock,
-                        onToggleDay = { hour, minute, dayOfWeek, active ->
-                            coroutineScope.launch {
-                                dbManager.upsertPattern(dayOfWeek, hour, minute, active)
-                                refreshPatterns()
-                                NextUpWidgetProvider.updateAllWidgets(context)
-                            }
+        },
+        bottomBar = {
+            if (!isLandscape) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = selectedTab == MainTab.SCHEDULE,
+                        onClick = { onSelectTab(MainTab.SCHEDULE) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_alarm),
+                                contentDescription = null
+                            )
                         },
-                        onToggleAll = { hour, minute, active ->
-                            coroutineScope.launch {
-                                dbManager.toggleAllPatternsForTime(hour, minute, active)
-                                refreshPatterns()
-                                NextUpWidgetProvider.updateAllWidgets(context)
-                            }
+                        label = { Text(stringResource(id = R.string.nav_schedule)) }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == MainTab.HISTORY,
+                        onClick = { onSelectTab(MainTab.HISTORY) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_history),
+                                contentDescription = null
+                            )
                         },
-                        onDeleteGroup = { hour, minute ->
-                            coroutineScope.launch {
-                                dbManager.deleteAllPatternsForTime(hour, minute)
-                                refreshPatterns()
-                                NextUpWidgetProvider.updateAllWidgets(context)
-                            }
-                        }
+                        label = { Text(stringResource(id = R.string.nav_history)) }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == MainTab.STATS,
+                        onClick = { onSelectTab(MainTab.STATS) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_bar_chart),
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.nav_stats)) }
                     )
                 }
             }
-        } else {
-            // Portrait: Single Column layout
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                NearestAlarmCard(
-                    countdownText = countdownText,
-                    targetDateTimeText = targetDateTimeText,
-                    hasAlarm = hasAlarm
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ActionButtons(
-                    onOpenClock = onOpenClock,
-                    onSetAlarm = onSetAlarm
-                )
-
-                if (isLearningPeriod) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    LearningPeriodBanner(
-                        dayNumber = learningDayNumber,
-                        onStopLearning = {
-                            prefs.stopLearningPeriod()
-                            android.widget.Toast.makeText(
-                                context,
-                                "Learning stopped. Current routine saved as reference.",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
+        }
+    ) { innerPadding ->
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            if (isLandscape) {
+                NavigationRail {
+                    NavigationRailItem(
+                        selected = selectedTab == MainTab.SCHEDULE,
+                        onClick = { onSelectTab(MainTab.SCHEDULE) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_alarm),
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.nav_schedule)) }
+                    )
+                    NavigationRailItem(
+                        selected = selectedTab == MainTab.HISTORY,
+                        onClick = { onSelectTab(MainTab.HISTORY) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_history),
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.nav_history)) }
+                    )
+                    NavigationRailItem(
+                        selected = selectedTab == MainTab.STATS,
+                        onClick = { onSelectTab(MainTab.STATS) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_bar_chart),
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.nav_stats)) }
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                when (selectedTab) {
+                    MainTab.SCHEDULE -> {
+                        if (isLandscape) {
+                            // Horizontal Landscape: 2-Column layout
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                // Left Column: Nearest Alarm hero card + Action buttons
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .verticalScroll(rememberScrollState()),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Top
+                                ) {
+                                    NearestAlarmCard(
+                                        countdownText = countdownText,
+                                        targetDateTimeText = targetDateTimeText,
+                                        hasAlarm = hasAlarm
+                                    )
 
-                WeeklyScheduleSection(
-                    learnedPatterns = learnedPatterns,
-                    nowMillis = nowMillis,
-                    nextAlarm = nextAlarm,
-                    onOpenClock = onOpenClock,
-                    onSetGroupedPatternInClock = onSetGroupedPatternInClock,
-                    onToggleDay = { hour, minute, dayOfWeek, active ->
-                        coroutineScope.launch {
-                            dbManager.upsertPattern(dayOfWeek, hour, minute, active)
-                            refreshPatterns()
-                            NextUpWidgetProvider.updateAllWidgets(context)
-                        }
-                    },
-                    onToggleAll = { hour, minute, active ->
-                        coroutineScope.launch {
-                            dbManager.toggleAllPatternsForTime(hour, minute, active)
-                            refreshPatterns()
-                            NextUpWidgetProvider.updateAllWidgets(context)
-                        }
-                    },
-                    onDeleteGroup = { hour, minute ->
-                        coroutineScope.launch {
-                            dbManager.deleteAllPatternsForTime(hour, minute)
-                            refreshPatterns()
-                            NextUpWidgetProvider.updateAllWidgets(context)
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    ActionButtons(
+                                        onOpenClock = onOpenClock,
+                                        onSetAlarm = onSetAlarm
+                                    )
+                                }
+
+                                // Right Column: Weekly Schedule & Predictions
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1.2f)
+                                        .fillMaxHeight()
+                                        .verticalScroll(rememberScrollState()),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (isLearningPeriod) {
+                                        LearningPeriodBanner(
+                                            dayNumber = learningDayNumber,
+                                            onStopLearning = {
+                                                prefs.stopLearningPeriod()
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "Learning stopped. Current routine saved as reference.",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                    }
+
+                                    WeeklyScheduleSection(
+                                        learnedPatterns = learnedPatterns,
+                                        nowMillis = nowMillis,
+                                        nextAlarm = nextAlarm,
+                                        onOpenClock = onOpenClock,
+                                        onSetGroupedPatternInClock = onSetGroupedPatternInClock,
+                                        onToggleDay = toggleDayAction,
+                                        onToggleAll = toggleAllAction,
+                                        onDeleteGroup = deleteGroupAction,
+                                        onOpenInactiveHistory = {
+                                            onSelectHistorySubTab(HistorySubTab.INACTIVE)
+                                            onSelectTab(MainTab.HISTORY)
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            // Portrait: Single Column layout
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 20.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                NearestAlarmCard(
+                                    countdownText = countdownText,
+                                    targetDateTimeText = targetDateTimeText,
+                                    hasAlarm = hasAlarm
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                ActionButtons(
+                                    onOpenClock = onOpenClock,
+                                    onSetAlarm = onSetAlarm
+                                )
+
+                                if (isLearningPeriod) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    LearningPeriodBanner(
+                                        dayNumber = learningDayNumber,
+                                        onStopLearning = {
+                                            prefs.stopLearningPeriod()
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Learning stopped. Current routine saved as reference.",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                WeeklyScheduleSection(
+                                    learnedPatterns = learnedPatterns,
+                                    nowMillis = nowMillis,
+                                    nextAlarm = nextAlarm,
+                                    onOpenClock = onOpenClock,
+                                    onSetGroupedPatternInClock = onSetGroupedPatternInClock,
+                                    onToggleDay = toggleDayAction,
+                                    onToggleAll = toggleAllAction,
+                                    onDeleteGroup = deleteGroupAction,
+                                    onOpenInactiveHistory = {
+                                        onSelectHistorySubTab(HistorySubTab.INACTIVE)
+                                        onSelectTab(MainTab.HISTORY)
+                                    }
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
                         }
                     }
-                )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    MainTab.HISTORY -> {
+                        HistoryScreen(
+                            learnedPatterns = learnedPatterns,
+                            alarmEvents = alarmEvents,
+                            subTab = historySubTab,
+                            onSelectSubTab = onSelectHistorySubTab,
+                            onSetGroupedPatternInClock = onSetGroupedPatternInClock,
+                            onRestoreGroup = { hour, minute ->
+                                coroutineScope.launch {
+                                    dbManager.toggleAllPatternsForTime(hour, minute, true)
+                                    refreshPatterns()
+                                    NextUpWidgetProvider.updateAllWidgets(appContext)
+                                    val timeStr = String.format("%02d:%02d", hour, minute)
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Restored $timeStr to Schedule",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            },
+                            onDeleteGroup = deleteGroupAction,
+                            onCleanupOneOffs = {
+                                coroutineScope.launch {
+                                    val removed = dbManager.deleteInactiveOneOffPatterns()
+                                    refreshPatterns()
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Cleaned up $removed one-off pattern(s)",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
+
+                    MainTab.STATS -> {
+                        StatsScreen(
+                            alarmEvents = alarmEvents,
+                            learnedPatterns = learnedPatterns
+                        )
+                    }
+                }
             }
         }
     }
@@ -787,6 +953,7 @@ fun WeeklyScheduleSection(
     onToggleDay: (Int, Int, Int, Boolean) -> Unit,
     onToggleAll: (Int, Int, Boolean) -> Unit,
     onDeleteGroup: (Int, Int) -> Unit,
+    onOpenInactiveHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -796,10 +963,16 @@ fun WeeklyScheduleSection(
         GroupedAlarmPattern.fromPatterns(learnedPatterns)
     }
 
-    val sortedGroups = remember(groupedPatterns, nowMillis, nextAlarm) {
-        groupedPatterns.sortedBy { group ->
-            group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis) ?: Long.MAX_VALUE
-        }
+    val activeGroups = remember(groupedPatterns, nowMillis, nextAlarm) {
+        groupedPatterns
+            .filter { it.isActive }
+            .sortedBy { group ->
+                group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis) ?: Long.MAX_VALUE
+            }
+    }
+
+    val inactiveCount = remember(groupedPatterns) {
+        groupedPatterns.count { !it.isActive }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -815,7 +988,7 @@ fun WeeklyScheduleSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "${groupedPatterns.count { it.isActive }} active",
+                text = "${activeGroups.size} active",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
@@ -824,7 +997,7 @@ fun WeeklyScheduleSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        if (groupedPatterns.isEmpty()) {
+        if (activeGroups.isEmpty() && inactiveCount == 0) {
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -850,176 +1023,246 @@ fun WeeklyScheduleSection(
                 }
             }
         } else {
-            sortedGroups.forEach { group ->
-                val nextOccurrence = group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis)
-                val isAlreadyActive = isGroupMatchingNextAlarm(group, nextAlarm)
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 5.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (group.isActive) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    )
+            if (activeGroups.isEmpty()) {
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .padding(18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Top row: Label + Time, and Actions (Set, Switch, Delete)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Text(
+                            text = "No Active Recurring Routines",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Restore a previous alarm from History or set a new recurring alarm in Clock.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                activeGroups.forEach { group ->
+                    val nextOccurrence = group.getNextOccurrenceMillis(nowMillis, nextAlarm?.triggerTimeMillis)
+                    val isAlreadyActive = isGroupMatchingNextAlarm(group, nextAlarm)
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 5.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f, fill = false)) {
-                                Text(
-                                    text = group.timeFormatted,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                val remainingText = if (group.isActive && nextOccurrence != null) {
-                                    val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
-                                    "Next: in $remaining"
-                                } else if (group.isActive) {
-                                    "No upcoming days"
-                                } else {
-                                    "One-off / Inactive"
-                                }
-
-                                Text(
-                                    text = remainingText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (group.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
+                            // Top row: Label + Time, and Actions (Set, Switch, Delete)
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                if (isAlreadyActive) {
-                                    FilledTonalButton(
-                                        onClick = {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Alarm for ${group.timeFormatted} is already active in Clock",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                            onOpenClock()
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Text(
+                                        text = group.timeFormatted,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1
+                                    )
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    val remainingText = if (nextOccurrence != null) {
+                                        val remaining = AlarmFormatter.formatRemaining(nextOccurrence, nowMillis)
+                                        "Next: in $remaining"
+                                    } else {
+                                        "No upcoming days"
+                                    }
+
+                                    Text(
+                                        text = remainingText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (isAlreadyActive) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "Alarm for ${group.timeFormatted} is already active in Clock",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                                onOpenClock()
+                                            },
+                                            modifier = Modifier.height(34.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        ) {
+                                            Text(
+                                                text = "Active ✓",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = { onSetGroupedPatternInClock(group) },
+                                            modifier = Modifier.height(34.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Set",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+
+                                    Switch(
+                                        checked = group.isActive,
+                                        onCheckedChange = { active ->
+                                            onToggleAll(group.hour, group.minute, active)
                                         },
-                                        modifier = Modifier.height(34.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
+                                        modifier = Modifier.scale(0.85f)
+                                    )
+
+                                    IconButton(
+                                        onClick = { groupToDelete = group },
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Text(
-                                            text = "Active ✓",
-                                            fontSize = 11.sp,
+                                            text = "✕",
+                                            color = MaterialTheme.colorScheme.error,
                                             fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
+                                            fontSize = 14.sp
                                         )
                                     }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { onSetGroupedPatternInClock(group) },
-                                        modifier = Modifier.height(34.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                        shape = RoundedCornerShape(8.dp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Bottom row: 7 circular weekday chips (M, T, W, T, F, S, S)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val days = listOf(
+                                    Calendar.MONDAY to "M",
+                                    Calendar.TUESDAY to "T",
+                                    Calendar.WEDNESDAY to "W",
+                                    Calendar.THURSDAY to "T",
+                                    Calendar.FRIDAY to "F",
+                                    Calendar.SATURDAY to "S",
+                                    Calendar.SUNDAY to "S"
+                                )
+                                for ((dayOfWeek, dayLetter) in days) {
+                                    val isSelected = dayOfWeek in group.activeDays
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                            .border(
+                                                width = if (isSelected) 0.dp else 1.dp,
+                                                color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                                shape = CircleShape
+                                            )
+                                            .clickable {
+                                                onToggleDay(group.hour, group.minute, dayOfWeek, !isSelected)
+                                            },
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "Set",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            textAlign = TextAlign.Center
+                                            text = dayLetter,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         )
                                     }
                                 }
-
-                                Switch(
-                                    checked = group.isActive,
-                                    onCheckedChange = { active ->
-                                        onToggleAll(group.hour, group.minute, active)
-                                    },
-                                    modifier = Modifier.scale(0.85f)
-                                )
-
-                                IconButton(
-                                    onClick = { groupToDelete = group },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Text(
-                                        text = "✕",
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                }
                             }
                         }
+                    }
+                }
+            }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Bottom row: 7 circular weekday chips (M, T, W, T, F, S, S)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val days = listOf(
-                                Calendar.MONDAY to "M",
-                                Calendar.TUESDAY to "T",
-                                Calendar.WEDNESDAY to "W",
-                                Calendar.THURSDAY to "T",
-                                Calendar.FRIDAY to "F",
-                                Calendar.SATURDAY to "S",
-                                Calendar.SUNDAY to "S"
-                            )
-                            for ((dayOfWeek, dayLetter) in days) {
-                                val isSelected = dayOfWeek in group.activeDays
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                        .border(
-                                            width = if (isSelected) 0.dp else 1.dp,
-                                            color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                            shape = CircleShape
-                                        )
-                                        .clickable {
-                                            onToggleDay(group.hour, group.minute, dayOfWeek, !isSelected)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = dayLetter,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                            }
-                        }
+            if (inactiveCount > 0) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(onClick = onOpenInactiveHistory),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.outlinedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "$inactiveCount inactive / one-off ${if (inactiveCount == 1) "alarm" else "alarms"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "View in History",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
